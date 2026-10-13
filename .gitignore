@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Expo & Metro bundler
+.expo/
+dist/
+web-build/
+.metro-health-check*
+
+# Android build outputs & machine-specific configs
+android/.gradle/
+android/build/
+android/app/build/
+android/.cxx/
+android/local.properties
+android/*.iml
+android/.idea/
+*.hprof
+*.jsbundle
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+
+# IDE & Editor files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# TypeScript build info
+*.tsbuildinfo

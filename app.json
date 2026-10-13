@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "btw vault",
+    "slug": "btw-vault",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "btw-vault",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.btwvault.app",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "btw vault uses Face ID to securely unlock your encrypted vault."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "package": "com.btwvault.app",
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow btw vault to use Face ID."
+        }
+      ],
+      "expo-font",
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-status-bar"
+    ]
+  }
+}
