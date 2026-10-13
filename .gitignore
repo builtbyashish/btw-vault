@@ -30,6 +30,7 @@ android/.idea/
 *.pem
 *.key
 *.keystore
+!android/app/debug.keystore
 *.jks
 *.p8
 *.p12

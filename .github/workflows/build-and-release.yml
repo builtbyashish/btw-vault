@@ -1,0 +1,101 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build APK and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+          cache: 'gradle'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Ensure Android debug keystore exists
+        run: |
+          if [ ! -f android/app/debug.keystore ]; then
+            echo "Generating fallback debug.keystore..."
+            keytool -genkey -v \
+              -keystore android/app/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          else
+            echo "debug.keystore exists."
+          fi
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
+      - name: Build Android Release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+          cd ..
+
+      - name: Prepare APK artifact
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          
+          # Find generated release APK
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: No APK found in android/app/build/outputs/apk/release!"
+            exit 1
+          fi
+          
+          echo "Found APK at: $APK_PATH"
+          mkdir -p release-artifacts
+          cp "$APK_PATH" "release-artifacts/btw-vault-v${VERSION}.apk"
+          echo "Copied APK to release-artifacts/btw-vault-v${VERSION}.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: btw-vault-apk-v${{ env.VERSION }}
+          path: release-artifacts/*.apk
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, updating artifact..."
+            gh release upload "$TAG" release-artifacts/*.apk --clobber
+          else
+            echo "Creating GitHub Release for $TAG..."
+            gh release create "$TAG" release-artifacts/*.apk \
+              --title "Release v${VERSION}" \
+              --generate-notes
+          fi
