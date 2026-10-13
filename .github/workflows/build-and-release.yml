@@ -34,7 +34,7 @@ jobs:
           cache: 'gradle'
 
       - name: Install npm dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Ensure Android debug keystore exists
         run: |
