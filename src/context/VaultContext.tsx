@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useMemo } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { VaultItem, VaultStatus, VaultConfig, EncryptedPayload } from '../types';
+import { VaultItem, VaultStatus, VaultConfig, EncryptedPayload, CustomCategoryDefinition } from '../types';
 import { CryptoService, base64ToBytes, bytesToBase64 } from '../core/crypto/cryptoService';
 import { VaultStorage } from '../core/storage/vaultStorage';
 import { SecureStorageService } from '../core/storage/secureStorageService';
@@ -44,6 +44,12 @@ interface VaultContextType {
   setAutoLockMinutes: (minutes: number) => Promise<boolean>;
   wipeVault: () => Promise<void>;
   importVaultBackup: (config: VaultConfig, payload: EncryptedPayload) => Promise<boolean>;
+  customCategories: CustomCategoryDefinition[];
+  pinnedCategoryIds: string[];
+  addCustomCategory: (cat: Omit<CustomCategoryDefinition, 'id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
+  updateCustomCategory: (cat: CustomCategoryDefinition) => Promise<boolean>;
+  deleteCustomCategory: (id: string) => Promise<boolean>;
+  setPinnedCategoryIds: (ids: string[]) => Promise<boolean>;
 }
 
 function sanitizeVaultItems(rawItems: VaultItem[]): VaultItem[] {
@@ -473,6 +479,132 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const customCategories = useMemo(() => config?.customCategories || [], [config]);
+  const pinnedCategoryIds = useMemo(
+    () => config?.pinnedCategoryIds || ['all', 'login', 'card', 'note'],
+    [config]
+  );
+
+  const addCustomCategory = async (
+    catData: Omit<CustomCategoryDefinition, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<boolean> => {
+    try {
+      const activeConfig = config || (await VaultStorage.loadVaultConfig());
+      if (!activeConfig) return false;
+      const newCat: CustomCategoryDefinition = {
+        ...catData,
+        id: `cat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const existingList = activeConfig.customCategories || [];
+      const updatedList = [...existingList, newCat];
+
+      const currentPinned = activeConfig.pinnedCategoryIds || ['all', 'login', 'card', 'note'];
+      const updatedPinned = currentPinned.length < 5 ? [...currentPinned, newCat.id] : currentPinned;
+
+      const updatedConfig: VaultConfig = {
+        ...activeConfig,
+        customCategories: updatedList,
+        pinnedCategoryIds: updatedPinned,
+        updatedAt: new Date().toISOString(),
+      };
+      await VaultStorage.saveVaultConfig(updatedConfig);
+      setConfig(updatedConfig);
+
+      GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
+        ExportImportService.getArmoredVaultBackup()
+      ).catch(() => {});
+
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Failed to add custom category');
+      return false;
+    }
+  };
+
+  const updateCustomCategory = async (cat: CustomCategoryDefinition): Promise<boolean> => {
+    try {
+      const activeConfig = config || (await VaultStorage.loadVaultConfig());
+      if (!activeConfig) return false;
+      const existingList = activeConfig.customCategories || [];
+      const updatedList = existingList.map((c) =>
+        c.id === cat.id ? { ...cat, updatedAt: new Date().toISOString() } : c
+      );
+      const updatedConfig: VaultConfig = {
+        ...activeConfig,
+        customCategories: updatedList,
+        updatedAt: new Date().toISOString(),
+      };
+      await VaultStorage.saveVaultConfig(updatedConfig);
+      setConfig(updatedConfig);
+
+      GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
+        ExportImportService.getArmoredVaultBackup()
+      ).catch(() => {});
+
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Failed to update custom category');
+      return false;
+    }
+  };
+
+  const deleteCustomCategory = async (id: string): Promise<boolean> => {
+    try {
+      const activeConfig = config || (await VaultStorage.loadVaultConfig());
+      if (!activeConfig) return false;
+      const existingList = activeConfig.customCategories || [];
+      const updatedList = existingList.filter((c) => c.id !== id);
+      const currentPinned = activeConfig.pinnedCategoryIds || ['all', 'login', 'card', 'note'];
+      const updatedPinned = currentPinned.filter((pId) => pId !== id);
+
+      const updatedConfig: VaultConfig = {
+        ...activeConfig,
+        customCategories: updatedList,
+        pinnedCategoryIds: updatedPinned,
+        updatedAt: new Date().toISOString(),
+      };
+      await VaultStorage.saveVaultConfig(updatedConfig);
+      setConfig(updatedConfig);
+
+      const affectedItems = items.filter((it) => it.category === id);
+      if (affectedItems.length > 0) {
+        const updatedItems = items.map((it) =>
+          it.category === id ? { ...it, category: 'other' as const, updatedAt: new Date().toISOString() } : it
+        );
+        await persistVaultItems(updatedItems);
+      }
+
+      GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
+        ExportImportService.getArmoredVaultBackup()
+      ).catch(() => {});
+
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete custom category');
+      return false;
+    }
+  };
+
+  const setPinnedCategoryIds = async (ids: string[]): Promise<boolean> => {
+    try {
+      const activeConfig = config || (await VaultStorage.loadVaultConfig());
+      if (!activeConfig) return false;
+      const updatedConfig: VaultConfig = {
+        ...activeConfig,
+        pinnedCategoryIds: ids.slice(0, 5),
+        updatedAt: new Date().toISOString(),
+      };
+      await VaultStorage.saveVaultConfig(updatedConfig);
+      setConfig(updatedConfig);
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Failed to update pinned categories');
+      return false;
+    }
+  };
+
   return (
     <VaultContext.Provider
       value={{
@@ -509,6 +641,12 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         setAutoLockMinutes,
         wipeVault,
         importVaultBackup,
+        customCategories,
+        pinnedCategoryIds,
+        addCustomCategory,
+        updateCustomCategory,
+        deleteCustomCategory,
+        setPinnedCategoryIds,
       }}
     >
       {children}

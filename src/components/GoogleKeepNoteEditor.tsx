@@ -26,6 +26,7 @@ import {
   ListTodo,
 } from 'lucide-react-native';
 import { HapticService } from '../core/haptics';
+import { AppHeaderBackButton } from './AppHeaderBackButton';
 
 export interface KeepNoteData {
   title: string;
@@ -288,15 +289,10 @@ export const GoogleKeepNoteEditor: React.FC<GoogleKeepNoteEditorProps> = ({
           { paddingTop: Math.max(insets.top, 12) + 4 },
         ]}
       >
-        <TouchableOpacity
+        <AppHeaderBackButton
           onPress={handleBack}
-          style={styles.headerIconButton}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          activeOpacity={0.6}
-          accessibilityLabel="Save and go back"
-        >
-          <ArrowLeft size={22} color="#1F2937" strokeWidth={2.4} />
-        </TouchableOpacity>
+          style={{ marginLeft: 0, marginRight: 0 }}
+        />
 
         <View style={styles.headerActionsRight}>
           {/* Pin Toggle */}

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,16 @@ import {
   ScrollView,
   PanResponder,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   KeyRound,
   Shield,
   Settings,
+  SlidersHorizontal,
   Database,
   Lock,
+  Info,
 } from 'lucide-react-native';
 import { useVault } from '../context/VaultContext';
 import { BtwVaultLogo } from './BtwVaultLogo';
@@ -38,13 +40,25 @@ const EASING_CLOSE = Easing.in(Easing.cubic);
 export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   isOpen,
   onClose,
-  activeRoute = 'index',
+  activeRoute,
   onNavigate,
 }) => {
   const router = useRouter();
-  const { items, lockVault } = useVault();
+  const pathname = usePathname();
+  const { items, customCategories, lockVault } = useVault();
   const { width: windowWidth } = useWindowDimensions();
   const drawerWidth = Math.min(windowWidth * 0.82, 320);
+
+  const currentRoute = useMemo(() => {
+    if (activeRoute) return activeRoute;
+    if (!pathname) return 'index';
+    if (pathname.includes('about')) return 'about';
+    if (pathname.includes('categories')) return 'categories';
+    if (pathname.includes('encrypted-db')) return 'encrypted-db';
+    if (pathname.includes('settings')) return 'settings';
+    if (pathname.includes('health')) return 'health';
+    return 'index';
+  }, [activeRoute, pathname]);
 
   const slideAnim = useRef(new Animated.Value(-drawerWidth)).current;
 
@@ -130,8 +144,20 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   }
 
   const handleNav = (route: string) => {
+    HapticService.selection();
     onClose();
-    onNavigate(route);
+
+    const isAlreadyActive =
+      (route === '/(tabs)' && currentRoute === 'index') ||
+      (route === '/(tabs)/health' && currentRoute === 'health') ||
+      (route === '/(tabs)/settings' && currentRoute === 'settings') ||
+      (route === '/settings/categories' && currentRoute === 'categories') ||
+      (route === '/settings/encrypted-db' && currentRoute === 'encrypted-db') ||
+      (route === '/settings/about' && currentRoute === 'about');
+
+    if (!isAlreadyActive) {
+      onNavigate(route);
+    }
   };
 
   const handleLock = async () => {
@@ -202,20 +228,20 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
             <TouchableOpacity
               style={[
                 styles.navItem,
-                activeRoute === 'index' && styles.navItemActive,
+                currentRoute === 'index' && styles.navItemActive,
               ]}
               onPress={() => handleNav('/(tabs)')}
               activeOpacity={0.5}
             >
               <KeyRound
-                color={activeRoute === 'index' ? '#007AFF' : '#3C4043'}
+                color={currentRoute === 'index' ? '#007AFF' : '#3C4043'}
                 size={20}
                 style={styles.navIcon}
               />
               <Text
                 style={[
                   styles.navLabel,
-                  activeRoute === 'index' && styles.navLabelActive,
+                  currentRoute === 'index' && styles.navLabelActive,
                 ]}
               >
                 Vault Items
@@ -223,13 +249,13 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
               <View
                 style={[
                   styles.badge,
-                  activeRoute === 'index' && styles.badgeActive,
+                  currentRoute === 'index' && styles.badgeActive,
                 ]}
               >
                 <Text
                   style={[
                     styles.badgeText,
-                    activeRoute === 'index' && styles.badgeTextActive,
+                    currentRoute === 'index' && styles.badgeTextActive,
                   ]}
                 >
                   {items.length}
@@ -241,20 +267,20 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
             <TouchableOpacity
               style={[
                 styles.navItem,
-                activeRoute === 'health' && styles.navItemActive,
+                currentRoute === 'health' && styles.navItemActive,
               ]}
               onPress={() => handleNav('/(tabs)/health')}
               activeOpacity={0.5}
             >
               <Shield
-                color={activeRoute === 'health' ? '#007AFF' : '#3C4043'}
+                color={currentRoute === 'health' ? '#007AFF' : '#3C4043'}
                 size={20}
                 style={styles.navIcon}
               />
               <Text
                 style={[
                   styles.navLabel,
-                  activeRoute === 'health' && styles.navLabelActive,
+                  currentRoute === 'health' && styles.navLabelActive,
                 ]}
               >
                 Watchtower
@@ -265,34 +291,113 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
             <TouchableOpacity
               style={[
                 styles.navItem,
-                activeRoute === 'settings' && styles.navItemActive,
+                currentRoute === 'settings' && styles.navItemActive,
               ]}
               onPress={() => handleNav('/(tabs)/settings')}
               activeOpacity={0.5}
             >
               <Settings
-                color={activeRoute === 'settings' ? '#007AFF' : '#3C4043'}
+                color={currentRoute === 'settings' ? '#007AFF' : '#3C4043'}
                 size={20}
                 style={styles.navIcon}
               />
               <Text
                 style={[
                   styles.navLabel,
-                  activeRoute === 'settings' && styles.navLabelActive,
+                  currentRoute === 'settings' && styles.navLabelActive,
                 ]}
               >
                 Settings
               </Text>
             </TouchableOpacity>
 
+            {/* Vault Customization */}
+            <TouchableOpacity
+              style={[
+                styles.navItem,
+                currentRoute === 'categories' && styles.navItemActive,
+              ]}
+              onPress={() => handleNav('/settings/categories')}
+              activeOpacity={0.5}
+            >
+              <SlidersHorizontal
+                color={currentRoute === 'categories' ? '#007AFF' : '#3C4043'}
+                size={20}
+                style={styles.navIcon}
+              />
+              <Text
+                style={[
+                  styles.navLabel,
+                  currentRoute === 'categories' && styles.navLabelActive,
+                ]}
+              >
+                Vault Customization
+              </Text>
+              {customCategories.length > 0 && (
+                <View
+                  style={[
+                    styles.badge,
+                    currentRoute === 'categories' && styles.badgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgeText,
+                      currentRoute === 'categories' && styles.badgeTextActive,
+                    ]}
+                  >
+                    {customCategories.length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
             {/* Encrypted Database Inspector */}
             <TouchableOpacity
-              style={styles.navItem}
+              style={[
+                styles.navItem,
+                currentRoute === 'encrypted-db' && styles.navItemActive,
+              ]}
               onPress={() => handleNav('/settings/encrypted-db')}
               activeOpacity={0.5}
             >
-              <Database color="#3C4043" size={20} style={styles.navIcon} />
-              <Text style={styles.navLabel}>Encrypted Database</Text>
+              <Database
+                color={currentRoute === 'encrypted-db' ? '#007AFF' : '#3C4043'}
+                size={20}
+                style={styles.navIcon}
+              />
+              <Text
+                style={[
+                  styles.navLabel,
+                  currentRoute === 'encrypted-db' && styles.navLabelActive,
+                ]}
+              >
+                Encrypted Database
+              </Text>
+            </TouchableOpacity>
+
+            {/* About btw vault */}
+            <TouchableOpacity
+              style={[
+                styles.navItem,
+                currentRoute === 'about' && styles.navItemActive,
+              ]}
+              onPress={() => handleNav('/settings/about')}
+              activeOpacity={0.5}
+            >
+              <Info
+                color={currentRoute === 'about' ? '#007AFF' : '#3C4043'}
+                size={20}
+                style={styles.navIcon}
+              />
+              <Text
+                style={[
+                  styles.navLabel,
+                  currentRoute === 'about' && styles.navLabelActive,
+                ]}
+              >
+                About btw vault
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

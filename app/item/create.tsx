@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Keyboard,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import {
@@ -21,13 +22,29 @@ import {
   Plus,
   Trash2,
   Check,
+  Info,
+  ShieldCheck,
+  X,
+  Folder,
+  ChevronRight,
+  Calendar,
+  Clock,
+  Lock,
+  Globe,
+  Mail,
+  Hash,
+  AlignLeft,
+  CheckSquare,
+  ListFilter,
 } from 'lucide-react-native';
 import { useVault } from '../../src/context/VaultContext';
 import { PasswordGeneratorModal } from '../../src/components/PasswordGeneratorModal';
+import { DatePickerModal, formatFriendlyDate, formatFriendlyTime } from '../../src/components/DatePickerModal';
+import { DropdownPickerModal, parseMultiSelectValues } from '../../src/components/DropdownPickerModal';
 import { TagEditor } from '../../src/components/TagEditor';
-import { CustomFieldEditor } from '../../src/components/CustomFieldEditor';
-import { ItemCategory, CustomField, CardDetails } from '../../src/types';
-import { CATEGORY_THEMES } from '../../src/theme/categoryColors';
+import { CustomFieldEditor, PREDEFINED_TYPES } from '../../src/components/CustomFieldEditor';
+import { ItemCategory, CustomField, CustomFieldType, CardDetails } from '../../src/types';
+import { CATEGORY_THEMES, CATEGORY_ICON_MAP } from '../../src/theme/categoryColors';
 import { HapticService } from '../../src/core/haptics';
 import {
   detectCardNetwork,
@@ -35,6 +52,7 @@ import {
   validateCardNumber,
   CardNetwork,
   CardNetworkLogo,
+  CardValidationResult,
 } from '../../src/card-validator';
 import { LiveCardPreview } from '../../src/components/LiveCardPreview';
 import { GoogleKeepNoteEditor } from '../../src/components/GoogleKeepNoteEditor';
@@ -99,19 +117,108 @@ export const CARD_TYPE_OPTIONS: { id: SupportedCardType; label: string }[] = [
 ];
 
 export default function CreateItemScreen() {
-  const { addItem, isLoading } = useVault();
+  const { addItem, isLoading, customCategories } = useVault();
   const router = useRouter();
   const params = useLocalSearchParams<{ type?: string }>();
 
-  // Category is determined strictly from the selection that opened this screen
-  const category: ItemCategory =
-    params.type && ['login', 'note', 'card', 'other'].includes(params.type)
-      ? (params.type as ItemCategory)
-      : 'login';
+  const customCategory = useMemo(() => {
+    return customCategories.find((c) => c.id === params.type);
+  }, [customCategories, params.type]);
+
+  const category: ItemCategory = useMemo(() => {
+    if (customCategory) return customCategory.id as ItemCategory;
+    if (params.type && ['login', 'note', 'card', 'other'].includes(params.type)) {
+      return params.type as ItemCategory;
+    }
+    return 'login';
+  }, [customCategory, params.type]);
+
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
-  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>(() => {
+    if (customCategory && customCategory.fields && customCategory.fields.length > 0) {
+      return customCategory.fields.map((f, idx) => ({
+        id: `cf_${Date.now()}_${idx}`,
+        label: f.label,
+        value: f.defaultValue || '',
+        type: f.type,
+        options: f.options ? [...f.options] : [],
+      }));
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (customCategory && customCategory.fields && customCategory.fields.length > 0 && customFields.length === 0) {
+      setCustomFields(
+        customCategory.fields.map((f, idx) => ({
+          id: `cf_${Date.now()}_${idx}`,
+          label: f.label,
+          value: f.defaultValue || '',
+          type: f.type,
+          options: f.options ? [...f.options] : [],
+        }))
+      );
+    }
+  }, [customCategory]);
+
+  // Custom Category State & Handlers
+  const [showFieldRevealed, setShowFieldRevealed] = useState<Record<string, boolean>>({});
+  const [activeKeyFieldForGen, setActiveKeyFieldForGen] = useState<string | null>(null);
+  const [showAddFieldModal, setShowAddFieldModal] = useState(false);
+  const [newFieldLabel, setNewFieldLabel] = useState('');
+  const [newFieldType, setNewFieldType] = useState<CustomFieldType>('text');
+  const [activePickerField, setActivePickerField] = useState<{
+    id: string;
+    mode: 'date' | 'time';
+    title?: string;
+    value?: string;
+  } | null>(null);
+  const [activeDropdownField, setActiveDropdownField] = useState<{
+    id: string;
+    title: string;
+    mode: 'select' | 'multiselect';
+    options: string[];
+    value: string;
+  } | null>(null);
+
+  const handleSelectPickerValue = (val: string) => {
+    if (activePickerField) {
+      handleUpdateCustomFieldValue(activePickerField.id, val);
+      setActivePickerField(null);
+    }
+  };
+
+  const handleUpdateCustomFieldValue = (id: string, value: string) => {
+    setCustomFields((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, value } : f))
+    );
+  };
+
+  const handleRemoveCustomField = (id: string) => {
+    HapticService.selection();
+    setCustomFields((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const handleAddNewCustomField = () => {
+    const trimmed = newFieldLabel.trim();
+    if (!trimmed) {
+      Alert.alert('Field Label Required', 'Please enter a name for this field.');
+      return;
+    }
+    HapticService.selection();
+    const newField: CustomField = {
+      id: `cf_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      label: trimmed,
+      type: newFieldType,
+      value: '',
+    };
+    setCustomFields((prev) => [...prev, newField]);
+    setNewFieldLabel('');
+    setNewFieldType('text');
+    setShowAddFieldModal(false);
+  };
 
   // 1. Login State
   const [username, setUsername] = useState('');
@@ -125,6 +232,8 @@ export default function CreateItemScreen() {
   // 3. Card State
   const [cardholderName, setCardholderName] = useState('');
   const [cardNumber, setCardNumber] = useState('');
+  const [cardNumberType, setCardNumberType] = useState<'full' | 'last4'>('last4');
+  const [showCardSecurityTip, setShowCardSecurityTip] = useState(false);
   const [expiryDate, setExpiryDate] = useState('');
   const [cvv, setCvv] = useState('');
   const [pin, setPin] = useState('');
@@ -140,9 +249,21 @@ export default function CreateItemScreen() {
   const pinInputRef = useRef<TextInput>(null);
 
   // Offline card validation memo
-  const cardValidation = useMemo(() => {
+  const cardValidation: CardValidationResult = useMemo(() => {
+    if (cardNumberType === 'last4') {
+      const raw = cardNumber.replace(/\D/g, '');
+      return {
+        isComplete: raw.length === 4,
+        isValid: raw.length === 4,
+        network: cardBrand as CardNetwork,
+        errors: [],
+        isValidFormat: raw.length === 4,
+        checksumValid: true,
+        possibleNetworks: [cardBrand as CardNetwork],
+      };
+    }
     return validateCardNumber(cardNumber);
-  }, [cardNumber]);
+  }, [cardNumber, cardNumberType, cardBrand]);
 
   const cvvMaxLen = cardBrand === 'amex' ? 4 : 3;
 
@@ -209,8 +330,29 @@ export default function CreateItemScreen() {
     setAdditionalUrls(additionalUrls.filter((_, i) => i !== index));
   };
 
+  const handleCardNumberTypeChange = (type: 'full' | 'last4') => {
+    if (type === cardNumberType) return;
+    HapticService.selection();
+    setCardNumberType(type);
+    if (type === 'last4') {
+      const raw = cardNumber.replace(/\D/g, '');
+      if (raw.length > 4) {
+        setCardNumber(raw.slice(-4));
+      }
+    } else {
+      if (cardNumber.length > 0) {
+        setCardNumber(formatCardNumber(cardNumber, cardBrand as any));
+      }
+    }
+  };
+
   // Format card number with network-aware spacing and detect network
   const handleCardNumberChange = (text: string) => {
+    if (cardNumberType === 'last4') {
+      const cleaned = text.replace(/\D/g, '').slice(0, 4);
+      setCardNumber(cleaned);
+      return;
+    }
     const detection = detectCardNetwork(text);
     const net = detection.network;
     const formatted = formatCardNumber(text, net);
@@ -278,13 +420,42 @@ export default function CreateItemScreen() {
   };
 
   const handleSave = async () => {
-    if (!title.trim()) {
-      Alert.alert('Required Field', 'Please enter a title for this item.');
-      return;
+    let finalTitle = title.trim();
+
+    if (customCategory) {
+      // 1. If user defined a field specifically labeled "Title" or "Name", prefer that
+      const explicitTitleField = customFields.find((f) => {
+        const l = f.label.trim().toLowerCase();
+        return l === 'title' || l === 'name' || l === 'item name' || l === 'account name';
+      });
+
+      if (explicitTitleField && explicitTitleField.value.trim().length > 0) {
+        finalTitle = explicitTitleField.value.trim();
+      } else {
+        // 2. Otherwise find the first field with a non-empty value
+        const firstFilledField = customFields.find((f) => f.value && f.value.trim().length > 0);
+        if (firstFilledField) {
+          const firstLine = firstFilledField.value.trim().split('\n')[0].trim();
+          finalTitle = firstLine.slice(0, 60);
+        } else if (finalTitle.length === 0) {
+          if (customFields.length > 0) {
+            Alert.alert('Required Field', `Please enter a value for "${customFields[0].label}".`);
+            return;
+          } else {
+            Alert.alert('Required Field', 'Please enter a title for this item.');
+            return;
+          }
+        }
+      }
+    } else {
+      if (!finalTitle) {
+        Alert.alert('Required Field', 'Please enter a title for this item.');
+        return;
+      }
     }
 
     const itemPayload: any = {
-      title: title.trim(),
+      title: finalTitle,
       category,
       tags: tags.length > 0 ? tags : undefined,
       notes: notes.trim() || undefined,
@@ -299,7 +470,8 @@ export default function CreateItemScreen() {
     } else if (category === 'card') {
       itemPayload.cardDetails = {
         cardholderName: cardholderName.trim() || undefined,
-        cardNumber: cardNumber.replace(/\s+/g, '') || undefined,
+        cardNumber: (cardNumberType === 'last4' ? cardNumber.replace(/\D/g, '') : cardNumber.replace(/\s+/g, '')) || undefined,
+        cardNumberType,
         expiryDate: expiryDate.trim() || undefined,
         cvv: cvv.trim() || undefined,
         pin: pin.trim() || undefined,
@@ -316,8 +488,30 @@ export default function CreateItemScreen() {
     }
   };
 
-  const activeCategoryTheme = CATEGORY_THEMES[category] || CATEGORY_THEMES.login;
-  const meta = CATEGORY_META[category] || CATEGORY_META.login;
+  const activeCategoryTheme = useMemo(() => {
+    if (customCategory) {
+      return {
+        category: customCategory.id as ItemCategory,
+        name: customCategory.name,
+        color: customCategory.color,
+        bgTint: customCategory.bgTint || `${customCategory.color}1A`,
+        icon: CATEGORY_ICON_MAP[customCategory.icon] || Folder,
+      };
+    }
+    return CATEGORY_THEMES[category] || CATEGORY_THEMES.login;
+  }, [customCategory, category]);
+
+  const meta = useMemo(() => {
+    if (customCategory) {
+      return {
+        name: customCategory.name,
+        createTitle: `New ${customCategory.name}`,
+        subtitle: `Template with ${customCategory.fields.length} default fields`,
+        icon: CATEGORY_ICON_MAP[customCategory.icon] || Folder,
+      };
+    }
+    return CATEGORY_META[category] || CATEGORY_META.login;
+  }, [customCategory, category]);
 
   // GOOGLE KEEP NOTE EXPERIENCE: Clean open canvas, zero form scaffolding
   if (category === 'note' || category === 'other') {
@@ -562,6 +756,7 @@ export default function CreateItemScreen() {
             <LiveCardPreview
               title={title}
               cardNumber={cardNumber}
+              cardNumberType={cardNumberType}
               cardholderName={cardholderName}
               expiryDate={expiryDate}
               network={cardBrand}
@@ -605,35 +800,140 @@ export default function CreateItemScreen() {
               {/* CARD NUMBER */}
               <View onLayout={(e) => { fieldOffsets.current['cardNumber'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.rowLabel}>
-                  <Text style={styles.label}>CARD NUMBER</Text>
-                  {cardValidation.isComplete && (
-                    <View
-                      style={[
-                        styles.validationPill,
-                        cardValidation.isValid ? styles.validationPillSuccess : styles.validationPillError,
-                      ]}
+                  <View style={styles.labelWithInfo}>
+                    <Text style={styles.label}>CARD NUMBER</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        HapticService.selection();
+                        setShowCardSecurityTip(!showCardSecurityTip);
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      activeOpacity={0.7}
+                      style={[styles.infoIconBtn, showCardSecurityTip && styles.infoIconBtnActive]}
+                      accessibilityLabel="Security options info"
                     >
-                      <Text
+                      <Info size={14} color={showCardSecurityTip ? '#007AFF' : '#8E8E93'} strokeWidth={2.2} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {cardNumberType === 'last4' ? (
+                    cardNumber.length === 4 ? (
+                      <View style={[styles.validationPill, styles.validationPillSuccess]}>
+                        <Text style={[styles.validationPillText, styles.validationPillTextSuccess]}>
+                          ✓ 4 Digits Stored
+                        </Text>
+                      </View>
+                    ) : cardNumber.length > 0 ? (
+                      <View style={[styles.validationPill, styles.validationPillNeutral]}>
+                        <Text style={[styles.validationPillText, styles.validationPillTextNeutral]}>
+                          {4 - cardNumber.length} left
+                        </Text>
+                      </View>
+                    ) : null
+                  ) : (
+                    cardValidation.isComplete && (
+                      <View
                         style={[
-                          styles.validationPillText,
-                          cardValidation.isValid ? styles.validationPillTextSuccess : styles.validationPillTextError,
+                          styles.validationPill,
+                          cardValidation.isValid ? styles.validationPillSuccess : styles.validationPillError,
                         ]}
                       >
-                        {cardValidation.isValid ? '✓ Valid' : 'Check Digit Error'}
-                      </Text>
-                    </View>
+                        <Text
+                          style={[
+                            styles.validationPillText,
+                            cardValidation.isValid ? styles.validationPillTextSuccess : styles.validationPillTextError,
+                          ]}
+                        >
+                          {cardValidation.isValid ? '✓ Valid' : 'Check Digit Error'}
+                        </Text>
+                      </View>
+                    )
                   )}
                 </View>
+
+                {/* SEGMENTED CONTROL: Last 4 Digits (first) vs Full Card */}
+                <View style={styles.cardModeSegment}>
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentBtn,
+                      cardNumberType === 'last4' && styles.segmentBtnActive,
+                    ]}
+                    onPress={() => handleCardNumberTypeChange('last4')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.segmentWithBadge}>
+                      <Text
+                        style={[
+                          styles.segmentBtnText,
+                          cardNumberType === 'last4' && styles.segmentBtnTextActive,
+                        ]}
+                      >
+                        Last 4 Digits
+                      </Text>
+                      <View style={styles.securityMiniBadge}>
+                        <Text style={styles.securityMiniBadgeText}>Safe</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentBtn,
+                      cardNumberType === 'full' && styles.segmentBtnActive,
+                    ]}
+                    onPress={() => handleCardNumberTypeChange('full')}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentBtnText,
+                        cardNumberType === 'full' && styles.segmentBtnTextActive,
+                      ]}
+                    >
+                      Full Card Number
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* TOOLTIP BANNER */}
+                {showCardSecurityTip && (
+                  <View style={styles.securityTipCard}>
+                    <View style={styles.securityTipHeader}>
+                      <View style={styles.securityTipTitleRow}>
+                        <ShieldCheck size={15} color="#007AFF" strokeWidth={2.4} />
+                        <Text style={styles.securityTipTitle}>Security & Privacy Choice</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setShowCardSecurityTip(false)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <X size={14} color="#8E8E93" />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.securityTipBody}>
+                      Prefer not to store full card numbers on your device? Switch to <Text style={{ fontWeight: '600', color: '#1C1C1E' }}>Last 4 Digits</Text> to keep just enough info to recognize your card (•••• 4242) without storing complete payment digits.
+                    </Text>
+                  </View>
+                )}
+
                 <View style={styles.cardNumberInputRow}>
+                  {cardNumberType === 'last4' && (
+                    <Text style={styles.last4PrefixText}>••••  ••••  •••• </Text>
+                  )}
                   <TextInput
                     ref={cardNumberInputRef}
-                    style={[styles.input, styles.monoInput, { flex: 1 }]}
-                    placeholder="•••• •••• •••• ••••"
+                    style={[
+                      styles.input,
+                      styles.monoInput,
+                      { flex: 1 },
+                      cardNumberType === 'last4' && styles.last4Input,
+                    ]}
+                    placeholder={cardNumberType === 'last4' ? '4242' : '•••• •••• •••• ••••'}
                     placeholderTextColor="#8E8E93"
                     value={cardNumber}
                     onChangeText={handleCardNumberChange}
                     keyboardType="number-pad"
-                    maxLength={cardBrand === 'amex' ? 17 : 23}
+                    maxLength={cardNumberType === 'last4' ? 4 : (cardBrand === 'amex' ? 17 : 23)}
                     returnKeyType="next"
                     onSubmitEditing={() => expiryInputRef.current?.focus()}
                     onFocus={() => handleInputFocus('cardNumber')}
@@ -642,7 +942,7 @@ export default function CreateItemScreen() {
                     <CardNetworkLogo network={cardBrand} size={22} />
                   </View>
                 </View>
-                {cardValidation.isComplete && !cardValidation.isValid && cardValidation.errors.includes('INVALID_CHECKSUM') && (
+                {cardNumberType === 'full' && cardValidation.isComplete && !cardValidation.isValid && cardValidation.errors.includes('INVALID_CHECKSUM') && (
                   <Text style={styles.fieldErrorText}>Card number failed Luhn checksum validation</Text>
                 )}
               </View>
@@ -805,16 +1105,491 @@ export default function CreateItemScreen() {
           </View>
         </>
       )}
+
+      {/* 3. CUSTOM CATEGORY UI (Native, first-class form fields matching Login & Card) */}
+      {category !== 'login' && category !== 'card' && (
+        <View style={styles.card}>
+          {/* If the category has NO fields configured, provide Title input */}
+          {customFields.length === 0 && (
+            <View onLayout={(e) => { fieldOffsets.current['title'] = e.nativeEvent.layout.y; }}>
+              <Text style={styles.label}>TITLE *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={`e.g. My ${customCategory ? customCategory.name : 'Item'}`}
+                placeholderTextColor="#8E8E93"
+                value={title}
+                onChangeText={setTitle}
+                onFocus={() => handleInputFocus('title')}
+              />
+            </View>
+          )}
+
+          {/* Render each field as a native form field */}
+          {customFields.map((field, idx) => {
+            const isSecret = field.type === 'key' || field.type === 'hidden';
+            const isRevealed = showFieldRevealed[field.id];
+
+            return (
+              <React.Fragment key={field.id}>
+                {(idx > 0 || customFields.length === 0) && <View style={styles.separator} />}
+
+                <View onLayout={(e) => { fieldOffsets.current[`field_${field.id}`] = e.nativeEvent.layout.y; }}>
+                  <View style={styles.rowLabel}>
+                    <Text style={styles.label}>{(field.label || 'FIELD').toUpperCase()}</Text>
+                    <View style={styles.labelActionsRow}>
+                      {isSecret && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setActiveKeyFieldForGen(field.id);
+                            setShowGenModal(true);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.genText, { color: activeCategoryTheme.color }]}>Generate</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        onPress={() => handleRemoveCustomField(field.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.6}
+                        style={{ marginLeft: 8 }}
+                      >
+                        <Trash2 color="#C7C7CC" size={15} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {field.type === 'textarea' ? (
+                    <View style={styles.textareaWrapper}>
+                      <TextInput
+                        style={styles.textareaInput}
+                        placeholder={field.label ? `Enter ${field.label}...` : 'Enter multiline text, notes, backup codes...'}
+                        placeholderTextColor="#8E8E93"
+                        value={field.value}
+                        onChangeText={(txt) => handleUpdateCustomFieldValue(field.id, txt)}
+                        multiline
+                        numberOfLines={4}
+                        textAlignVertical="top"
+                        onFocus={() => handleInputFocus(`field_${field.id}`)}
+                      />
+                      <View style={styles.textareaFooter}>
+                        <Text style={styles.textareaCounter}>
+                          {field.value
+                            ? `${field.value.split('\n').length} line${field.value.split('\n').length === 1 ? '' : 's'} · ${field.value.length} char${field.value.length === 1 ? '' : 's'}`
+                            : 'Multiline text area'}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : field.type === 'date' ? (
+                    <TouchableOpacity
+                      style={styles.pickerFieldButton}
+                      onPress={() => {
+                        HapticService.selection();
+                        setActivePickerField({ id: field.id, mode: 'date', title: field.label, value: field.value });
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.pickerFieldIconBox, { backgroundColor: '#007AFF15' }]}>
+                        <Calendar color="#007AFF" size={16} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.pickerFieldValueText, !field.value && styles.pickerFieldPlaceholder]}>
+                          {field.value ? formatFriendlyDate(field.value) : (field.label ? `Select ${field.label}` : 'Select date')}
+                        </Text>
+                        {field.value ? (
+                          <Text style={styles.pickerFieldSubText}>{field.value}</Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.pickerFieldChevronBox}>
+                        <ChevronRight color="#C7C7CC" size={16} />
+                      </View>
+                    </TouchableOpacity>
+                  ) : field.type === 'time' ? (
+                    <TouchableOpacity
+                      style={styles.pickerFieldButton}
+                      onPress={() => {
+                        HapticService.selection();
+                        setActivePickerField({ id: field.id, mode: 'time', title: field.label, value: field.value });
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.pickerFieldIconBox, { backgroundColor: '#FF2D5515' }]}>
+                        <Clock color="#FF2D55" size={16} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.pickerFieldValueText, !field.value && styles.pickerFieldPlaceholder]}>
+                          {field.value ? formatFriendlyTime(field.value) : (field.label ? `Select ${field.label}` : 'Select time')}
+                        </Text>
+                        {field.value ? (
+                          <Text style={styles.pickerFieldSubText}>{field.value}</Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.pickerFieldChevronBox}>
+                        <ChevronRight color="#C7C7CC" size={16} />
+                      </View>
+                    </TouchableOpacity>
+                  ) : field.type === 'select' ? (
+                    <TouchableOpacity
+                      style={styles.pickerFieldButton}
+                      onPress={() => {
+                        HapticService.selection();
+                        setActiveDropdownField({
+                          id: field.id,
+                          title: field.label || 'Select option',
+                          mode: 'select',
+                          options: field.options || [],
+                          value: field.value || '',
+                        });
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.pickerFieldIconBox, { backgroundColor: '#007AFF15' }]}>
+                        <CheckSquare color="#007AFF" size={16} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.pickerFieldValueText, !field.value && styles.pickerFieldPlaceholder]}>
+                          {field.value || (field.label ? `Select ${field.label}` : 'Select option')}
+                        </Text>
+                        {field.options && field.options.length > 0 ? (
+                          <Text style={styles.pickerFieldSubText}>
+                            {field.options.length} {field.options.length === 1 ? 'option available' : 'options available'}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.pickerFieldChevronBox}>
+                        <ChevronRight color="#C7C7CC" size={16} />
+                      </View>
+                    </TouchableOpacity>
+                  ) : field.type === 'multiselect' ? (
+                    <TouchableOpacity
+                      style={styles.pickerFieldButton}
+                      onPress={() => {
+                        HapticService.selection();
+                        setActiveDropdownField({
+                          id: field.id,
+                          title: field.label || 'Select options',
+                          mode: 'multiselect',
+                          options: field.options || [],
+                          value: field.value || '',
+                        });
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.pickerFieldIconBox, { backgroundColor: '#0284C715' }]}>
+                        <ListFilter color="#0284C7" size={16} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        {field.value ? (
+                          <View style={styles.multiSelectChipsWrap}>
+                            {parseMultiSelectValues(field.value).map((item, idx) => (
+                              <View key={`${item}-${idx}`} style={styles.multiSelectChip}>
+                                <Text style={styles.multiSelectChipText} numberOfLines={1}>{item}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={[styles.pickerFieldValueText, styles.pickerFieldPlaceholder]}>
+                            {field.label ? `Select ${field.label}...` : 'Select options...'}
+                          </Text>
+                        )}
+                        {field.options && field.options.length > 0 ? (
+                          <Text style={styles.pickerFieldSubText}>
+                            {field.options.length} {field.options.length === 1 ? 'option available' : 'options available'}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.pickerFieldChevronBox}>
+                        <ChevronRight color="#C7C7CC" size={16} />
+                      </View>
+                    </TouchableOpacity>
+                  ) : field.type === 'key' ? (
+                    <View style={styles.fieldWithIconContainer}>
+                      <View style={[styles.inputPrefixIconBox, { backgroundColor: '#8B5CF618' }]}>
+                        <KeyRound color="#8B5CF6" size={15} />
+                      </View>
+                      <TextInput
+                        style={[styles.inputWithPrefix, styles.monoInput]}
+                        placeholder={field.label ? `Enter ${field.label}` : 'Enter secret key or token'}
+                        placeholderTextColor="#8E8E93"
+                        secureTextEntry={!isRevealed}
+                        value={field.value}
+                        onChangeText={(txt) => handleUpdateCustomFieldValue(field.id, txt)}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        onFocus={() => handleInputFocus(`field_${field.id}`)}
+                      />
+                      <TouchableOpacity
+                        onPress={() => {
+                          HapticService.selection();
+                          setShowFieldRevealed((prev) => ({
+                            ...prev,
+                            [field.id]: !prev[field.id],
+                          }));
+                        }}
+                        style={styles.eyeBtn}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.6}
+                      >
+                        {isRevealed ? (
+                          <EyeOff color="#8E8E93" size={18} />
+                        ) : (
+                          <Eye color="#8E8E93" size={18} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : field.type === 'hidden' ? (
+                    <View style={styles.fieldWithIconContainer}>
+                      <View style={[styles.inputPrefixIconBox, { backgroundColor: '#FF3B3018' }]}>
+                        <Lock color="#FF3B30" size={15} />
+                      </View>
+                      <TextInput
+                        style={[styles.inputWithPrefix, styles.monoInput]}
+                        placeholder={field.label ? `Enter ${field.label}` : 'Enter secret'}
+                        placeholderTextColor="#8E8E93"
+                        secureTextEntry={!isRevealed}
+                        value={field.value}
+                        onChangeText={(txt) => handleUpdateCustomFieldValue(field.id, txt)}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        onFocus={() => handleInputFocus(`field_${field.id}`)}
+                      />
+                      <TouchableOpacity
+                        onPress={() => {
+                          HapticService.selection();
+                          setShowFieldRevealed((prev) => ({
+                            ...prev,
+                            [field.id]: !prev[field.id],
+                          }));
+                        }}
+                        style={styles.eyeBtn}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.6}
+                      >
+                        {isRevealed ? (
+                          <EyeOff color="#8E8E93" size={18} />
+                        ) : (
+                          <Eye color="#8E8E93" size={18} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : field.type === 'payment' ? (
+                    <View style={styles.fieldWithIconContainer}>
+                      <View style={[styles.inputPrefixIconBox, { backgroundColor: '#EC489918' }]}>
+                        <CreditCard color="#EC4899" size={15} />
+                      </View>
+                      <TextInput
+                        style={[styles.inputWithPrefix, styles.monoInput]}
+                        placeholder={field.label ? `Enter ${field.label}` : 'IBAN, Routing, Account or Card #'}
+                        placeholderTextColor="#8E8E93"
+                        value={field.value}
+                        onChangeText={(txt) => handleUpdateCustomFieldValue(field.id, txt)}
+                        autoCapitalize="characters"
+                        onFocus={() => handleInputFocus(`field_${field.id}`)}
+                      />
+                    </View>
+                  ) : field.type === 'email' ? (
+                    <View style={styles.fieldWithIconContainer}>
+                      <View style={[styles.inputPrefixIconBox, { backgroundColor: '#007AFF18' }]}>
+                        <Mail color="#007AFF" size={15} />
+                      </View>
+                      <TextInput
+                        style={styles.inputWithPrefix}
+                        placeholder={field.label ? `Enter ${field.label}` : 'name@example.com'}
+                        placeholderTextColor="#8E8E93"
+                        value={field.value}
+                        onChangeText={(txt) => handleUpdateCustomFieldValue(field.id, txt)}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        onFocus={() => handleInputFocus(`field_${field.id}`)}
+                      />
+                    </View>
+                  ) : field.type === 'url' || field.type === 'link' ? (
+                    <View style={styles.fieldWithIconContainer}>
+                      <View style={[styles.inputPrefixIconBox, { backgroundColor: '#34C75918' }]}>
+                        <Globe color="#34C759" size={15} />
+                      </View>
+                      <TextInput
+                        style={styles.inputWithPrefix}
+                        placeholder={field.label ? `Enter ${field.label}` : 'https://example.com'}
+                        placeholderTextColor="#8E8E93"
+                        value={field.value}
+                        onChangeText={(txt) => handleUpdateCustomFieldValue(field.id, txt)}
+                        keyboardType="url"
+                        autoCapitalize="none"
+                        onFocus={() => handleInputFocus(`field_${field.id}`)}
+                      />
+                    </View>
+                  ) : field.type === 'number' ? (
+                    <View style={styles.fieldWithIconContainer}>
+                      <View style={[styles.inputPrefixIconBox, { backgroundColor: '#FF950018' }]}>
+                        <Hash color="#FF9500" size={15} />
+                      </View>
+                      <TextInput
+                        style={styles.inputWithPrefix}
+                        placeholder={field.label ? `Enter ${field.label}` : '0'}
+                        placeholderTextColor="#8E8E93"
+                        value={field.value}
+                        onChangeText={(txt) => handleUpdateCustomFieldValue(field.id, txt)}
+                        keyboardType="numeric"
+                        onFocus={() => handleInputFocus(`field_${field.id}`)}
+                      />
+                    </View>
+                  ) : (
+                    <TextInput
+                      style={styles.input}
+                      placeholder={field.label ? `Enter ${field.label}` : 'Enter value'}
+                      placeholderTextColor="#8E8E93"
+                      value={field.value}
+                      onChangeText={(txt) => handleUpdateCustomFieldValue(field.id, txt)}
+                      onFocus={() => handleInputFocus(`field_${field.id}`)}
+                    />
+                  )}
+                </View>
+              </React.Fragment>
+            );
+          })}
+
+          {/* Add Another Field Button (native form style matching Add Another Website) */}
+          <View style={styles.separator} />
+          <TouchableOpacity
+            style={styles.addAnotherBtn}
+            onPress={() => {
+              HapticService.selection();
+              setShowAddFieldModal(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Plus color={activeCategoryTheme.color} size={13} />
+            <Text style={[styles.addAnotherText, { color: activeCategoryTheme.color }]}>
+              Add Another Field
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       </ScrollView>
 
       <PasswordGeneratorModal
         visible={showGenModal}
-        onClose={() => setShowGenModal(false)}
+        onClose={() => {
+          setShowGenModal(false);
+          setActiveKeyFieldForGen(null);
+        }}
         onUsePassword={(p) => {
-          setPassword(p);
-          setShowPassword(true);
+          if (activeKeyFieldForGen) {
+            handleUpdateCustomFieldValue(activeKeyFieldForGen, p);
+            setShowFieldRevealed((prev) => ({ ...prev, [activeKeyFieldForGen]: true }));
+            setActiveKeyFieldForGen(null);
+          } else {
+            setPassword(p);
+            setShowPassword(true);
+          }
         }}
       />
+
+      {/* Date & Time Picker Modal */}
+      <DatePickerModal
+        visible={activePickerField !== null}
+        onClose={() => setActivePickerField(null)}
+        onSelect={handleSelectPickerValue}
+        initialValue={activePickerField?.value || ''}
+        mode={activePickerField?.mode || 'date'}
+        title={activePickerField?.title ? `Select ${activePickerField.title}` : undefined}
+        accentColor={activeCategoryTheme.color}
+      />
+
+      {/* Dropdown / Multi-Select Picker Modal */}
+      <DropdownPickerModal
+        visible={activeDropdownField !== null}
+        onClose={() => setActiveDropdownField(null)}
+        onSelect={(val) => {
+          if (activeDropdownField) {
+            handleUpdateCustomFieldValue(activeDropdownField.id, val);
+            setActiveDropdownField(null);
+          }
+        }}
+        initialValue={activeDropdownField?.value || ''}
+        options={activeDropdownField?.options || []}
+        mode={activeDropdownField?.mode || 'select'}
+        title={activeDropdownField?.title}
+        accentColor={activeCategoryTheme.color}
+      />
+
+      {/* Modal to add an extra field on the fly */}
+      <Modal
+        visible={showAddFieldModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddFieldModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.addFieldModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAddFieldModal(false)}
+        >
+          <View style={styles.addFieldModalSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.addFieldModalHeader}>
+              <Text style={styles.addFieldModalTitle}>Add Field</Text>
+              <TouchableOpacity
+                onPress={() => setShowAddFieldModal(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X color="#8E8E93" size={18} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.addFieldModalLabel}>FIELD LABEL</Text>
+            <TextInput
+              style={styles.addFieldModalInput}
+              placeholder="e.g. Account Number, PIN, Recovery Email"
+              placeholderTextColor="#8E8E93"
+              value={newFieldLabel}
+              onChangeText={setNewFieldLabel}
+              autoFocus
+            />
+
+            <Text style={styles.addFieldModalLabel}>FIELD TYPE</Text>
+            <View style={styles.fieldTypeChipsGrid}>
+              {PREDEFINED_TYPES.map((t) => {
+                const isSelected = newFieldType === t.type;
+                const IconComp = t.icon;
+                return (
+                  <TouchableOpacity
+                    key={t.type}
+                    style={[
+                      styles.fieldTypeChip,
+                      isSelected && { backgroundColor: `${t.color}20`, borderColor: t.color },
+                    ]}
+                    onPress={() => {
+                      HapticService.selection();
+                      setNewFieldType(t.type);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <IconComp color={isSelected ? t.color : '#8E8E93'} size={14} style={{ marginRight: 6 }} />
+                    <Text
+                      style={[
+                        styles.fieldTypeChipText,
+                        isSelected && { color: t.color, fontWeight: '700' },
+                      ]}
+                    >
+                      {t.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.addFieldConfirmBtn, { backgroundColor: activeCategoryTheme.color }]}
+              onPress={handleAddNewCustomField}
+              activeOpacity={0.8}
+            >
+              <Plus color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
+              <Text style={styles.addFieldConfirmBtnText}>Add Field to Form</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -929,6 +1704,111 @@ const styles = StyleSheet.create({
   halfCol: {
     flex: 1,
   },
+  labelWithInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  infoIconBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+  },
+  infoIconBtnActive: {
+    backgroundColor: '#E1EFFF',
+  },
+  cardModeSegment: {
+    flexDirection: 'row',
+    backgroundColor: '#E5E5EA',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 7,
+  },
+  segmentBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2.5,
+    elevation: 2,
+  },
+  segmentBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  segmentBtnTextActive: {
+    color: '#1C1C1E',
+    fontWeight: '700',
+  },
+  segmentWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  securityMiniBadge: {
+    backgroundColor: 'rgba(52, 199, 89, 0.16)',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  securityMiniBadgeText: {
+    color: '#34C759',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  securityTipCard: {
+    backgroundColor: '#F0F7FF',
+    borderWidth: 1,
+    borderColor: '#C7E2FE',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+  },
+  securityTipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  securityTipTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  securityTipTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  securityTipBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#3C3C43',
+  },
+  last4PrefixText: {
+    fontSize: 16,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#8E8E93',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginRight: 4,
+  },
+  last4Input: {
+    letterSpacing: 2,
+  },
   cardNumberInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -950,6 +1830,9 @@ const styles = StyleSheet.create({
   validationPillError: {
     backgroundColor: 'rgba(255, 59, 48, 0.12)',
   },
+  validationPillNeutral: {
+    backgroundColor: 'rgba(142, 142, 147, 0.12)',
+  },
   validationPillText: {
     fontSize: 10,
     fontWeight: '700',
@@ -960,6 +1843,9 @@ const styles = StyleSheet.create({
   },
   validationPillTextError: {
     color: '#FF3B30',
+  },
+  validationPillTextNeutral: {
+    color: '#8E8E93',
   },
   fieldErrorText: {
     fontSize: 11,
@@ -1047,5 +1933,188 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: -0.2,
+  },
+  labelActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  addFieldModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  addFieldModalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  addFieldModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  addFieldModalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  addFieldModalLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8E8E93',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  addFieldModalInput: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#000000',
+    marginBottom: 16,
+  },
+  fieldTypeChipsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  fieldTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  fieldTypeChipText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  addFieldConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 12,
+  },
+  addFieldConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  textareaWrapper: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 10,
+    marginTop: 4,
+  },
+  textareaInput: {
+    fontSize: 14,
+    color: '#000000',
+    minHeight: 88,
+    textAlignVertical: 'top',
+    lineHeight: 20,
+  },
+  textareaFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 6,
+    marginTop: 6,
+  },
+  textareaCounter: {
+    fontSize: 11,
+    color: '#8E8E93',
+  },
+  pickerFieldButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  pickerFieldIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  pickerFieldValueText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  pickerFieldPlaceholder: {
+    color: '#8E8E93',
+    fontWeight: '400',
+  },
+  pickerFieldSubText: {
+    fontSize: 11,
+    color: '#8E8E93',
+    marginTop: 1,
+  },
+  pickerFieldChevronBox: {
+    marginLeft: 8,
+  },
+  fieldWithIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 10,
+    marginTop: 4,
+  },
+  inputPrefixIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  inputWithPrefix: {
+    flex: 1,
+    fontSize: 15,
+    color: '#000000',
+    paddingVertical: 10,
+  },
+  multiSelectChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  multiSelectChip: {
+    backgroundColor: '#0284C715',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#0284C730',
+  },
+  multiSelectChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0284C7',
   },
 });

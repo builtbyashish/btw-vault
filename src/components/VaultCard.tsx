@@ -5,6 +5,7 @@ import { VaultItem } from '../types';
 import { getItemBadgeTheme } from '../theme/categoryColors';
 import { CardNetworkLogo } from '../card-validator/logos';
 import { resolveCardTheme } from '../card-validator/theme';
+import { useVault } from '../context/VaultContext';
 
 interface VaultCardProps {
   item: VaultItem;
@@ -19,7 +20,8 @@ export const VaultCard: React.FC<VaultCardProps> = ({
   onPress,
   onLongPress,
 }) => {
-  const badgeTheme = getItemBadgeTheme(item);
+  const { customCategories } = useVault();
+  const badgeTheme = getItemBadgeTheme(item, customCategories);
   const IconComponent = badgeTheme.icon;
   const isCard = item.category === 'card';
   const cardTheme = isCard
@@ -79,6 +81,15 @@ export const VaultCard: React.FC<VaultCardProps> = ({
           .slice(0, 45);
       }
       return 'Note';
+    }
+
+    if (item.category !== 'login' && item.category !== 'card' && item.category !== 'note' && item.category !== 'other') {
+      if (item.customFields && item.customFields.length > 0) {
+        const first = item.customFields[0];
+        const isHidden = first.type === 'hidden' || first.type === 'key';
+        return `${first.label || 'Field'}: ${isHidden ? '••••••••' : first.value || '—'}`;
+      }
+      return item.notes ? item.notes.replace(/\n+/g, ' ').slice(0, 35) : badgeTheme.label;
     }
 
     // Default (Login)

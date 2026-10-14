@@ -1,4 +1,4 @@
-import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, forwardRef, useImperativeHandle, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,14 @@ import {
   KeyRound,
   CreditCard,
   StickyNote,
+  MoreHorizontal,
+  Folder,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ItemCategory } from '../types';
 import { HapticService } from '../core/haptics';
+import { useVault } from '../context/VaultContext';
+import { CATEGORY_ICON_MAP } from '../theme/categoryColors';
 
 export interface SpeedDialFABRef {
   open: () => void;
@@ -36,28 +40,6 @@ interface OptionConfig {
   icon: any;
 }
 
-// Ordered from top to bottom (Note is lowest, sitting closest to the FAB)
-const SPEED_DIAL_OPTIONS: OptionConfig[] = [
-  {
-    type: 'login',
-    label: 'Login',
-    color: '#FFB703', // 🟡 Gold Yellow
-    icon: KeyRound,
-  },
-  {
-    type: 'card',
-    label: 'Card',
-    color: '#E91E63', // 💖 Magenta Pink
-    icon: CreditCard,
-  },
-  {
-    type: 'note',
-    label: 'Note',
-    color: '#7C4DFF', // 🟣 Purple
-    icon: StickyNote,
-  },
-];
-
 // Material 3 Motion Curves
 const EASING_OPEN = Easing.bezier(0.05, 0.7, 0.1, 1.0);  // Emphasized Decelerate
 const EASING_CLOSE = Easing.bezier(0.3, 0.0, 0.8, 0.15); // Emphasized Accelerate
@@ -66,24 +48,97 @@ export const SpeedDialFAB = forwardRef<SpeedDialFABRef, SpeedDialFABProps>(
   ({ onSelectOption }, ref) => {
     const insets = useSafeAreaInsets();
     const bottomInset = insets.bottom || 0;
+    const { customCategories, pinnedCategoryIds, openCreateSheet } = useVault();
     const [isOpen, setIsOpen] = useState(false);
     const [isRendered, setIsRendered] = useState(false);
 
-    // Animation values
+    // Dynamic Options: Builtin + Custom, respecting 5 action buttons maximum
+    const allCreatables = useMemo<OptionConfig[]>(() => {
+      const builtins: OptionConfig[] = [
+        {
+          type: 'login',
+          label: 'Login',
+          color: '#FFB703', // 🟡 Gold Yellow
+          icon: KeyRound,
+        },
+        {
+          type: 'card',
+          label: 'Card',
+          color: '#E91E63', // 💖 Magenta Pink
+          icon: CreditCard,
+        },
+        {
+          type: 'note',
+          label: 'Note',
+          color: '#7C4DFF', // 🟣 Purple
+          icon: StickyNote,
+        },
+      ];
+
+      const customs: OptionConfig[] = customCategories.map((c) => ({
+        type: c.id,
+        label: c.name,
+        color: c.color,
+        icon: CATEGORY_ICON_MAP[c.icon] || Folder,
+      }));
+
+      return [...builtins, ...customs];
+    }, [customCategories]);
+
+    const displayOptions = useMemo<OptionConfig[]>(() => {
+      const validPinned = pinnedCategoryIds.filter((id) => id !== 'all');
+      const pinnedConfigs: OptionConfig[] = [];
+
+      validPinned.forEach((id) => {
+        const match = allCreatables.find((c) => c.type === id);
+        if (match) pinnedConfigs.push(match);
+      });
+
+      // Append unpinned if slots remain
+      allCreatables.forEach((item) => {
+        if (!pinnedConfigs.some((p) => p.type === item.type)) {
+          pinnedConfigs.push(item);
+        }
+      });
+
+      if (allCreatables.length <= 5) {
+        return pinnedConfigs.slice(0, 5);
+      } else {
+        // More than 5 categories: 4 pinned categories, followed by "More..." at the bottom (closest to FAB)
+        const top4 = pinnedConfigs.slice(0, 4);
+        return [
+          ...top4,
+          {
+            type: '__more__' as any,
+            label: 'More...',
+            color: '#64748B',
+            icon: MoreHorizontal,
+          },
+        ];
+      }
+    }, [allCreatables, pinnedCategoryIds]);
+
+    // Animation values: support up to 5 actions
     const backdropAnim = useRef(new Animated.Value(0)).current;
     const fabRotateAnim = useRef(new Animated.Value(0)).current;
-    const itemsAnim = useRef(
-      SPEED_DIAL_OPTIONS.map(() => new Animated.Value(0))
-    ).current;
+    const itemsAnim = useRef([
+      new Animated.Value(0),
+      new Animated.Value(0),
+      new Animated.Value(0),
+      new Animated.Value(0),
+      new Animated.Value(0),
+    ]).current;
 
     const openSpeedDial = () => {
       HapticService.impactMedium();
       setIsRendered(true);
       setIsOpen(true);
 
+      const activeAnims = itemsAnim.slice(0, displayOptions.length);
+
       backdropAnim.setValue(0);
       fabRotateAnim.setValue(0);
-      itemsAnim.forEach((anim) => anim.setValue(0));
+      activeAnims.forEach((anim) => anim.setValue(0));
 
       Animated.parallel([
         Animated.timing(backdropAnim, {
@@ -98,10 +153,10 @@ export const SpeedDialFAB = forwardRef<SpeedDialFABRef, SpeedDialFABProps>(
           easing: EASING_OPEN,
           useNativeDriver: true,
         }),
-        // Stagger options from BOTTOM to TOP (Note first, then Doc, then Card, then Login)
+        // Stagger options from BOTTOM to TOP
         Animated.stagger(
-          42,
-          [...itemsAnim].reverse().map((anim) =>
+          38,
+          [...activeAnims].reverse().map((anim) =>
             Animated.spring(anim, {
               toValue: 1,
               friction: 6,
@@ -115,6 +170,7 @@ export const SpeedDialFAB = forwardRef<SpeedDialFABRef, SpeedDialFABProps>(
 
     const closeSpeedDial = (callback?: () => void) => {
       setIsOpen(false);
+      const activeAnims = itemsAnim.slice(0, displayOptions.length);
 
       Animated.parallel([
         Animated.timing(backdropAnim, {
@@ -131,8 +187,8 @@ export const SpeedDialFAB = forwardRef<SpeedDialFABRef, SpeedDialFABProps>(
         }),
         // Retract options smoothly downwards back towards the FAB
         Animated.stagger(
-          20,
-          itemsAnim.map((anim) =>
+          18,
+          activeAnims.map((anim) =>
             Animated.timing(anim, {
               toValue: 0,
               duration: 130,
@@ -170,7 +226,11 @@ export const SpeedDialFAB = forwardRef<SpeedDialFABRef, SpeedDialFABProps>(
     const handleSelect = (category: ItemCategory) => {
       HapticService.selection();
       closeSpeedDial(() => {
-        onSelectOption(category);
+        if ((category as string) === '__more__') {
+          openCreateSheet();
+        } else {
+          onSelectOption(category);
+        }
       });
     };
 
@@ -233,7 +293,7 @@ export const SpeedDialFAB = forwardRef<SpeedDialFABRef, SpeedDialFABProps>(
               style={[styles.optionsContainer, { bottom: bottomInset + 88 }]}
               pointerEvents={isOpen ? 'box-none' : 'none'}
             >
-              {SPEED_DIAL_OPTIONS.map((opt, index) => {
+              {displayOptions.map((opt, index) => {
                 const IconComponent = opt.icon;
                 const anim = itemsAnim[index];
 

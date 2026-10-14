@@ -19,6 +19,7 @@ import {
 } from 'lucide-react-native';
 import { useVault } from '../src/context/VaultContext';
 import { VaultCard } from '../src/components/VaultCard';
+import { AppHeaderBackButton } from '../src/components/AppHeaderBackButton';
 import { VaultItem, ItemCategory } from '../src/types';
 import { CATEGORY_THEMES } from '../src/theme/categoryColors';
 
@@ -137,16 +138,10 @@ export default function SearchScreen() {
       {/* Top Google Keep-style search header */}
       <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
         <View style={styles.headerBar}>
-          <TouchableOpacity
-            style={styles.iconButton}
+          <AppHeaderBackButton
             onPress={() => router.back()}
-            activeOpacity={0.5}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-          >
-            <ArrowLeft size={22} color="#000000" strokeWidth={2.2} />
-          </TouchableOpacity>
+            style={{ marginLeft: 0, marginRight: 6 }}
+          />
 
           <TextInput
             ref={inputRef}

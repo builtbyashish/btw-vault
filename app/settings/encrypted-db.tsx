@@ -16,10 +16,12 @@ import {
   HardDrive,
   RefreshCw,
 } from 'lucide-react-native';
+import { Stack, useRouter } from 'expo-router';
 import { Paths } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import { VaultStorage } from '../../src/core/storage/vaultStorage';
 import { EncryptedPayload, VaultConfig } from '../../src/types';
+import { AppHeader } from '../../src/components/AppHeader';
 
 /**
  * Contracts long cryptographic strings into a secure abbreviated format
@@ -32,6 +34,7 @@ function contractHash(value: string | undefined | null, lead: number = 8, trail:
 }
 
 export default function EncryptedDatabaseScreen() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<EncryptedPayload | null>(null);
   const [config, setConfig] = useState<VaultConfig | null>(null);
@@ -69,23 +72,23 @@ export default function EncryptedDatabaseScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Reading encrypted database blocks...</Text>
-      </View>
-    );
-  }
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      {/* Zero Knowledge Security Banner */}
-      <View style={styles.banner}>
-        <View style={styles.bannerHeader}>
-          <ShieldCheck color="#34C759" size={22} />
-          <Text style={styles.bannerTitle}>Zero-Knowledge Encrypted Storage</Text>
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppHeader title="Encrypted Database" onBack={() => router.back()} />
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Reading encrypted database blocks...</Text>
         </View>
+      ) : (
+        <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Zero Knowledge Security Banner */}
+          <View style={styles.banner}>
+            <View style={styles.bannerHeader}>
+              <ShieldCheck color="#34C759" size={22} />
+              <Text style={styles.bannerTitle}>Zero-Knowledge Encrypted Storage</Text>
+            </View>
         <Text style={styles.bannerText}>
           This inspector verifies local disk encryption. All ciphertext and cryptographic parameters are contracted and protected on-screen so they cannot be extracted or misused.
         </Text>
@@ -218,7 +221,9 @@ export default function EncryptedDatabaseScreen() {
         <RefreshCw color="#8E8E93" size={16} style={{ marginRight: 6 }} />
         <Text style={styles.reloadBtnText}>Refresh DB Inspector</Text>
       </TouchableOpacity>
-    </ScrollView>
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
@@ -248,8 +253,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#34C759',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
   bannerHeader: {
     flexDirection: 'row',

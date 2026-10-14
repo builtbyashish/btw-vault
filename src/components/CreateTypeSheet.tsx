@@ -7,17 +7,23 @@ import {
   StyleSheet,
   Platform,
   TouchableWithoutFeedback,
+  ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   KeyRound,
   CreditCard,
   StickyNote,
-  ChevronRight,
   X,
+  Folder,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 import { ItemCategory } from '../types';
-import { CATEGORY_THEMES } from '../theme/categoryColors';
+import { CATEGORY_THEMES, CATEGORY_ICON_MAP } from '../theme/categoryColors';
+import { useVault } from '../context/VaultContext';
+import { HapticService } from '../core/haptics';
 
 interface CreateTypeSheetProps {
   visible: boolean;
@@ -28,7 +34,6 @@ interface CreateTypeSheetProps {
 interface TypeOption {
   category: ItemCategory;
   title: string;
-  description: string;
   icon: any;
   color: string;
   bgTint: string;
@@ -39,32 +44,53 @@ export const CreateTypeSheet: React.FC<CreateTypeSheetProps> = ({
   onClose,
   onSelectType,
 }) => {
+  const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
+  const { customCategories } = useVault();
+
+  // 4 square columns on phones, 6 on tablets
+  const numColumns = windowWidth >= 600 ? 6 : 4;
+  const sheetHorizontalPadding = 16;
+  const gridGap = 8;
+  const totalGap = (numColumns - 1) * gridGap;
+  const availableWidth = windowWidth - sheetHorizontalPadding * 2 - totalGap;
+  const cardWidth = Math.floor(availableWidth / numColumns);
+
   const options: TypeOption[] = [
     {
       category: 'login',
-      title: 'Login & Password',
-      description: 'Account credentials, multiple websites, notes & tags',
+      title: 'Login',
       icon: KeyRound,
       color: CATEGORY_THEMES.login.color,
       bgTint: CATEGORY_THEMES.login.bgTint,
     },
     {
       category: 'card',
-      title: 'Credit / Debit Card',
-      description: 'Card number, CVV, expiry, PIN, brand & details',
+      title: 'Card',
       icon: CreditCard,
       color: CATEGORY_THEMES.card.color,
       bgTint: CATEGORY_THEMES.card.bgTint,
     },
     {
       category: 'note',
-      title: 'Notes',
-      description: 'Clean title & open canvas freeform text for anything',
+      title: 'Note',
       icon: StickyNote,
       color: CATEGORY_THEMES.note.color,
       bgTint: CATEGORY_THEMES.note.bgTint,
     },
+    ...customCategories.map((c) => ({
+      category: c.id,
+      title: c.name,
+      icon: CATEGORY_ICON_MAP[c.icon] || Folder,
+      color: c.color,
+      bgTint: c.bgTint || `${c.color}1A`,
+    })),
   ];
+
+  const handleManageCategories = () => {
+    onClose();
+    router.push('/settings/categories');
+  };
 
   return (
     <Modal
@@ -87,44 +113,64 @@ export const CreateTypeSheet: React.FC<CreateTypeSheetProps> = ({
               <View style={styles.header}>
                 <View>
                   <Text style={styles.headerTitle}>New Vault Item</Text>
-                  <Text style={styles.headerSubtitle}>Select item category to protect</Text>
+                  <Text style={styles.headerSubtitle}>Select category to create</Text>
                 </View>
                 <TouchableOpacity
                   onPress={onClose}
                   style={styles.closeBtn}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close sheet"
                 >
                   <X color="#8E8E93" size={20} />
                 </TouchableOpacity>
               </View>
 
-              {/* 5 Options List */}
-              <View style={styles.optionsList}>
-                {options.map((opt, index) => {
-                  const Icon = opt.icon;
-                  const isLast = index === options.length - 1;
+              {/* Square Category Grid (4 on phones, 6 on tablets) */}
+              <ScrollView
+                style={{ maxHeight: 420 }}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.gridContainer}>
+                  {options.map((opt) => {
+                    const Icon = opt.icon;
 
-                  return (
-                    <TouchableOpacity
-                      key={opt.category}
-                      style={[styles.optionRow, !isLast && styles.rowBorder]}
-                      onPress={() => onSelectType(opt.category)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.iconBox, { backgroundColor: opt.bgTint }]}>
-                        <Icon color={opt.color} size={22} />
-                      </View>
-                      <View style={styles.textContainer}>
-                        <Text style={styles.optionTitle}>{opt.title}</Text>
-                        <Text style={styles.optionDescription} numberOfLines={1}>
-                          {opt.description}
+                    return (
+                      <TouchableOpacity
+                        key={opt.category}
+                        style={[styles.squareCard, { width: cardWidth }]}
+                        onPress={() => {
+                          HapticService.selection();
+                          onSelectType(opt.category);
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Create ${opt.title}`}
+                      >
+                        <View style={[styles.cardIconBox, { backgroundColor: opt.bgTint }]}>
+                          <Icon color={opt.color} size={20} strokeWidth={2.2} />
+                        </View>
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          {opt.title}
                         </Text>
-                      </View>
-                      <ChevronRight color="#C7C7CC" size={18} />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+
+              {/* Manage Categories Shortcut Row */}
+              <TouchableOpacity
+                style={styles.manageRow}
+                onPress={handleManageCategories}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Customize categories in playground"
+              >
+                <SlidersHorizontal color="#007AFF" size={15} style={{ marginRight: 8 }} />
+                <Text style={styles.manageText}>Customize Categories in Playground</Text>
+              </TouchableOpacity>
 
               <SafeAreaView edges={['bottom']} />
             </View>
@@ -148,15 +194,15 @@ const styles = StyleSheet.create({
   sheet: {
     width: '100%',
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingHorizontal: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 10 : 24,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 20,
   },
   indicatorContainer: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   indicator: {
     width: 36,
@@ -168,8 +214,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginTop: 6,
+    marginTop: 4,
     marginBottom: 16,
+    paddingHorizontal: 4,
   },
   headerTitle: {
     fontSize: 20,
@@ -187,45 +234,52 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
     borderRadius: 16,
   },
-  optionsList: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    overflow: 'hidden',
-    marginBottom: 8,
+  scrollContent: {
+    paddingBottom: 6,
   },
-  optionRow: {
+  gridContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5EA',
-  },
-  iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  squareCard: {
+    aspectRatio: 1,
+    minHeight: 82,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    padding: 6,
   },
-  textContainer: {
-    flex: 1,
-    marginRight: 8,
+  cardIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
   },
-  optionTitle: {
-    fontSize: 16,
+  cardTitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  manageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E5EA',
+  },
+  manageText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: '#000000',
-    marginBottom: 3,
-  },
-  optionDescription: {
-    fontSize: 12,
-    color: '#8E8E93',
+    color: '#007AFF',
   },
 });

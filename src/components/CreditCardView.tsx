@@ -12,6 +12,7 @@ import {
   Copy,
   Check,
   Radio,
+  ShieldCheck,
 } from 'lucide-react-native';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { CardDetails, VaultItem } from '../types';
@@ -74,6 +75,10 @@ export const CreditCardView: React.FC<CreditCardViewProps> = ({
 
   const handleCopyNumber = async () => {
     if (!card.cardNumber) return;
+    if (isLast4) {
+      await handleCopy(last4, 'card');
+      return;
+    }
     if (!showNumber) {
       const ok = await authenticate('Authenticate to copy card number');
       if (!ok) return;
@@ -128,14 +133,19 @@ export const CreditCardView: React.FC<CreditCardViewProps> = ({
 
   // Card formatting
   const rawClean = card.cardNumber?.replace(/\s+/g, '') || '';
+  const isLast4 = card.cardNumberType === 'last4' || (rawClean.length > 0 && rawClean.length <= 4);
   const last4 = rawClean.slice(-4) || '••••';
-  const first4 = rawClean.length >= 8 ? rawClean.slice(0, 4) : '4209';
+  const first4 = rawClean.length >= 8 ? rawClean.slice(0, 4) : '••••';
 
-  const maskedDisplay = rawClean.length >= 8
+  const maskedDisplay = isLast4
+    ? `••••  ••••  ••••  ${last4}`
+    : rawClean.length >= 8
     ? `${first4}  ••••  ••••  ${last4}`
     : `••••  ••••  ••••  ${last4}`;
 
-  const revealedDisplay = rawClean.length > 0
+  const revealedDisplay = isLast4
+    ? `••••  ••••  ••••  ${last4}`
+    : rawClean.length > 0
     ? rawClean.replace(/(\d{4})/g, '$1  ').trim()
     : '••••  ••••  ••••  ••••';
 
@@ -185,6 +195,12 @@ export const CreditCardView: React.FC<CreditCardViewProps> = ({
               <Text style={styles.cardTitleText} numberOfLines={1}>
                 {cardTitle}
               </Text>
+              {isLast4 && (
+                <View style={styles.safeBadge}>
+                  <ShieldCheck size={11} color="#34C759" strokeWidth={2.6} />
+                  <Text style={styles.safeBadgeText}>Safe 4</Text>
+                </View>
+              )}
             </View>
             {renderBrandLogo()}
           </View>
@@ -415,6 +431,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: -0.2,
     flex: 1,
+  },
+  safeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(52, 199, 89, 0.4)',
+    gap: 3,
+  },
+  safeBadgeText: {
+    color: '#F2F2F7',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   // Brand Logos
   mastercardBadge: {

@@ -86,17 +86,10 @@ export const CredCardDeck: React.FC<CredCardDeckProps> = ({
   };
 
   const handleCardPress = (item: VaultItem, index: number) => {
-    if (index === activeIndex) {
-      // Tapping active card navigates to detail view
-      onPressCard(item);
-    } else {
-      // Tapping stacked card smoothly scrolls it into focus
-      HapticService.selection();
-      scrollViewRef.current?.scrollTo({
-        y: index * SNAP_STEP,
-        animated: true,
-      });
-    }
+    HapticService.selection();
+    setActiveIndex(index);
+    activeIndexRef.current = index;
+    onPressCard(item);
   };
 
   // Target on-screen Y position for card `cardIdx` when `activeIdx` is focused
@@ -114,16 +107,14 @@ export const CredCardDeck: React.FC<CredCardDeckProps> = ({
     return bottomStackBaseY + offsetBelow * BOTTOM_PEEK;
   };
 
-  const viewportHeight = Math.max(windowHeight - 200, 540);
+  const viewportHeight = Math.max(windowHeight - 160, 560);
   const scrollContentHeight = Math.max(
-    (cards.length - 1) * SNAP_STEP + viewportHeight,
+    cards.length * SNAP_STEP + viewportHeight,
     viewportHeight
   );
 
   return (
     <View style={styles.deckOuterContainer}>
-
-
       {/* Scrollable Container with Native Snapping */}
       <Animated.ScrollView
         ref={scrollViewRef as any}
@@ -131,8 +122,8 @@ export const CredCardDeck: React.FC<CredCardDeckProps> = ({
         contentContainerStyle={[
           styles.deckScrollContent,
           {
-            height: scrollContentHeight,
-            paddingBottom: (insets.bottom || 0) + 100,
+            minHeight: scrollContentHeight,
+            paddingBottom: (insets.bottom || 0) + 120,
           },
         ]}
         snapToInterval={SNAP_STEP}
@@ -142,6 +133,8 @@ export const CredCardDeck: React.FC<CredCardDeckProps> = ({
         onScroll={handleScroll}
         onMomentumScrollEnd={handleMomentumScrollEnd}
       >
+        {/* In-flow height anchor ensuring reliable scroll range on Android */}
+        <View style={{ height: scrollContentHeight }} pointerEvents="none" />
         {cards.map((item, index) => {
           const isCardActive = index === activeIndex;
           const isTarget = activeItemForMenu?.id === item.id;

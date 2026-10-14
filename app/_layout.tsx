@@ -10,6 +10,7 @@ import { VaultProvider, useVault } from '../src/context/VaultContext';
 import { CreateTypeSheet } from '../src/components/CreateTypeSheet';
 import { BtwVaultLogo } from '../src/components/BtwVaultLogo';
 import { AppSecurityService } from '../src/core/security/appSecurityService';
+import { AppHeaderBackButton } from '../src/components/AppHeaderBackButton';
 import * as WebBrowser from 'expo-web-browser';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -62,44 +63,60 @@ function RootNavigation() {
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTintColor: '#007AFF',
-          headerTitleStyle: { fontWeight: '600', fontSize: 17, color: '#000000' },
+          headerTintColor: '#000000',
+          headerTitleStyle: {
+            fontWeight: '600',
+            fontSize: 18,
+            color: '#000000',
+          },
+          headerTitleAlign: 'left',
           headerShadowVisible: false,
+          headerBackVisible: false,
+          headerLeft: ({ canGoBack }) =>
+            canGoBack ? <AppHeaderBackButton onPress={() => router.back()} /> : null,
           contentStyle: { backgroundColor: '#F2F2F7' },
-          animation: 'slide_from_right',
+          animation: 'none',
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="setup" options={{ title: 'Initialize Vault', headerShown: false }} />
         <Stack.Screen name="unlock" options={{ title: 'Unlock Vault', headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="search" options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="search" options={{ headerShown: false, animation: 'default' }} />
         <Stack.Screen
           name="item/create"
           options={{
             title: 'New Item',
-            headerBackTitle: 'Back',
           }}
         />
         <Stack.Screen
           name="item/[id]"
           options={{
             title: 'Details',
-            headerBackTitle: 'Back',
           }}
         />
         <Stack.Screen
           name="item/edit/[id]"
           options={{
             title: 'Edit',
-            headerBackTitle: 'Back',
           }}
         />
         <Stack.Screen
           name="settings/encrypted-db"
           options={{
-            title: 'Encrypted Database',
-            headerBackTitle: 'Settings',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="settings/categories"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="settings/about"
+          options={{
+            headerShown: false,
           }}
         />
       </Stack>

@@ -13,6 +13,7 @@ import { useVault } from '../../src/context/VaultContext';
 import { NavigationDrawer } from '../../src/components/NavigationDrawer';
 import { BtwVaultLogo } from '../../src/components/BtwVaultLogo';
 import { BiometricSetupModal } from '../../src/components/BiometricSetupModal';
+import { AppHeaderBackButton } from '../../src/components/AppHeaderBackButton';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function TabLayout() {
           headerShadowVisible: false,
           // Bottom tab bar completely removed in favor of Google Keep-style Navigation Drawer
           tabBarStyle: { display: 'none' },
+          animation: 'fade',
         }}
       >
         <Tabs.Screen
@@ -98,16 +100,7 @@ export default function TabLayout() {
           options={{
             title: 'Watchtower',
             headerLeft: () => (
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={() => router.push('/(tabs)')}
-                activeOpacity={0.5}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Back to vault"
-              >
-                <ArrowLeft color="#000000" size={22} strokeWidth={2.4} />
-              </TouchableOpacity>
+              <AppHeaderBackButton onPress={() => router.push('/(tabs)')} />
             ),
           }}
         />
@@ -116,16 +109,7 @@ export default function TabLayout() {
           options={{
             title: 'Settings',
             headerLeft: () => (
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={() => router.push('/(tabs)')}
-                activeOpacity={0.5}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Back to vault"
-              >
-                <ArrowLeft color="#000000" size={22} strokeWidth={2.4} />
-              </TouchableOpacity>
+              <AppHeaderBackButton onPress={() => router.push('/(tabs)')} />
             ),
           }}
         />

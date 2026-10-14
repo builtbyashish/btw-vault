@@ -25,8 +25,16 @@ import {
   Lock,
   X,
   ChevronDown,
+  AlignLeft,
+  KeyRound,
+  CreditCard,
+  CheckSquare,
+  ListFilter,
 } from 'lucide-react-native';
 import { CustomField, CustomFieldType } from '../types';
+import { DatePickerModal, formatFriendlyDate, formatFriendlyTime } from './DatePickerModal';
+import { DropdownPickerModal, parseMultiSelectValues } from './DropdownPickerModal';
+import { HapticService } from '../core/haptics';
 
 interface CustomFieldEditorProps {
   fields: CustomField[];
@@ -35,7 +43,7 @@ interface CustomFieldEditorProps {
   onInputFocus?: (e: any) => void;
 }
 
-interface FieldTypeDefinition {
+export interface FieldTypeDefinition {
   type: CustomFieldType;
   label: string;
   icon: any;
@@ -44,7 +52,7 @@ interface FieldTypeDefinition {
   color: string;
 }
 
-const PREDEFINED_TYPES: FieldTypeDefinition[] = [
+export const PREDEFINED_TYPES: FieldTypeDefinition[] = [
   {
     type: 'text',
     label: 'Text',
@@ -52,6 +60,46 @@ const PREDEFINED_TYPES: FieldTypeDefinition[] = [
     placeholder: 'Field value',
     keyboardType: 'default',
     color: '#007AFF',
+  },
+  {
+    type: 'textarea',
+    label: 'Text Area',
+    icon: AlignLeft,
+    placeholder: 'Multiline text (e.g. backup codes, notes, keys)',
+    keyboardType: 'default',
+    color: '#0EA5E9',
+  },
+  {
+    type: 'select',
+    label: 'Dropdown',
+    icon: CheckSquare,
+    placeholder: 'Select option...',
+    keyboardType: 'default',
+    color: '#007AFF',
+  },
+  {
+    type: 'multiselect',
+    label: 'Multi-Select',
+    icon: ListFilter,
+    placeholder: 'Select options...',
+    keyboardType: 'default',
+    color: '#0284C7',
+  },
+  {
+    type: 'key',
+    label: 'Secret Key / Token',
+    icon: KeyRound,
+    placeholder: 'MFA Secret, Private Key, API Token',
+    keyboardType: 'default',
+    color: '#8B5CF6',
+  },
+  {
+    type: 'payment',
+    label: 'Payment / Account',
+    icon: CreditCard,
+    placeholder: 'IBAN, Routing, Account or Amount',
+    keyboardType: 'default',
+    color: '#EC4899',
   },
   {
     type: 'number',
@@ -120,6 +168,19 @@ export const CustomFieldEditor: React.FC<CustomFieldEditorProps> = ({
   const [showHidden, setShowHidden] = useState<{ [key: string]: boolean }>({});
   const [pickerModalVisible, setPickerModalVisible] = useState(false);
   const [activeEditingFieldId, setActiveEditingFieldId] = useState<string | null>(null);
+  const [activePickerField, setActivePickerField] = useState<{
+    id: string;
+    mode: 'date' | 'time';
+    title?: string;
+    value?: string;
+  } | null>(null);
+  const [activeDropdownField, setActiveDropdownField] = useState<{
+    id: string;
+    title: string;
+    mode: 'select' | 'multiselect';
+    options: string[];
+    value: string;
+  } | null>(null);
 
   const getTypeDef = (type: CustomFieldType): FieldTypeDefinition => {
     return PREDEFINED_TYPES.find((t) => t.type === type) || PREDEFINED_TYPES[0];
@@ -242,42 +303,126 @@ export const CustomFieldEditor: React.FC<CustomFieldEditorProps> = ({
               </TouchableOpacity>
             </View>
 
-            <View style={styles.valueRow}>
-              <TextInput
-                style={[
-                  styles.valueInput,
-                  field.type === 'hidden' && styles.monoText,
-                ]}
-                placeholder={typeDef.placeholder}
-                placeholderTextColor="#8E8E93"
-                keyboardType={typeDef.keyboardType || 'default'}
-                autoCapitalize={
-                  field.type === 'email' || field.type === 'url' || field.type === 'link'
-                    ? 'none'
-                    : 'sentences'
-                }
-                secureTextEntry={field.type === 'hidden' && !showHidden[field.id]}
-                value={field.value}
-                onChangeText={(txt) => handleUpdateField(field.id, 'value', txt)}
-                onFocus={onInputFocus}
-              />
-              {field.type === 'hidden' && (
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  activeOpacity={0.6}
-                  onPress={() =>
-                    setShowHidden((prev) => ({ ...prev, [field.id]: !prev[field.id] }))
-                  }
-                >
-                  {showHidden[field.id] ? (
-                    <EyeOff color="#8E8E93" size={18} />
+            {field.type === 'textarea' ? (
+              <View style={styles.textareaEditorBox}>
+                <TextInput
+                  style={styles.textareaEditorInput}
+                  placeholder={typeDef.placeholder}
+                  placeholderTextColor="#8E8E93"
+                  multiline
+                  numberOfLines={3}
+                  value={field.value}
+                  onChangeText={(txt) => handleUpdateField(field.id, 'value', txt)}
+                  onFocus={onInputFocus}
+                />
+                <View style={styles.textareaEditorFooter}>
+                  <Text style={styles.textareaEditorCounter}>
+                    {field.value
+                      ? `${field.value.split('\n').length} line${field.value.split('\n').length === 1 ? '' : 's'} · ${field.value.length} char${field.value.length === 1 ? '' : 's'}`
+                      : 'Multiline text area'}
+                  </Text>
+                </View>
+              </View>
+            ) : field.type === 'date' || field.type === 'time' ? (
+              <TouchableOpacity
+                style={styles.pickerValueButton}
+                onPress={() => {
+                  HapticService.selection();
+                  setActivePickerField({
+                    id: field.id,
+                    mode: field.type as 'date' | 'time',
+                    title: field.label || (field.type === 'date' ? 'Date' : 'Time'),
+                    value: field.value,
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.pickerValueText, !field.value && styles.pickerPlaceholderText]}>
+                    {field.value
+                      ? field.type === 'date'
+                        ? formatFriendlyDate(field.value)
+                        : formatFriendlyTime(field.value)
+                      : typeDef.placeholder}
+                  </Text>
+                  {field.value ? (
+                    <Text style={styles.pickerSubText}>{field.value}</Text>
+                  ) : null}
+                </View>
+                <ChevronDown size={15} color="#8E8E93" />
+              </TouchableOpacity>
+            ) : field.type === 'select' || field.type === 'multiselect' ? (
+              <TouchableOpacity
+                style={styles.pickerValueButton}
+                onPress={() => {
+                  HapticService.selection();
+                  setActiveDropdownField({
+                    id: field.id,
+                    title: field.label || (field.type === 'select' ? 'Select Option' : 'Select Options'),
+                    mode: field.type as 'select' | 'multiselect',
+                    options: field.options || [],
+                    value: field.value || '',
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  {field.type === 'multiselect' && field.value ? (
+                    <View style={styles.multiSelectChipsWrap}>
+                      {parseMultiSelectValues(field.value).map((val, idx) => (
+                        <View key={idx} style={styles.multiSelectChip}>
+                          <Text style={styles.multiSelectChipText}>{val}</Text>
+                        </View>
+                      ))}
+                    </View>
                   ) : (
-                    <Eye color="#8E8E93" size={18} />
+                    <Text style={[styles.pickerValueText, !field.value && styles.pickerPlaceholderText]}>
+                      {field.value || typeDef.placeholder}
+                    </Text>
                   )}
-                </TouchableOpacity>
-              )}
-            </View>
+                </View>
+                <ChevronDown size={15} color="#8E8E93" />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.valueRow}>
+                <TextInput
+                  style={[
+                    styles.valueInput,
+                    (field.type === 'hidden' || field.type === 'key' || field.type === 'payment' || field.type === 'number') && styles.monoText,
+                  ]}
+                  placeholder={typeDef.placeholder}
+                  placeholderTextColor="#8E8E93"
+                  keyboardType={typeDef.keyboardType || 'default'}
+                  autoCapitalize={
+                    field.type === 'email' || field.type === 'url' || field.type === 'link' || field.type === 'key'
+                      ? 'none'
+                      : field.type === 'payment'
+                      ? 'characters'
+                      : 'sentences'
+                  }
+                  secureTextEntry={(field.type === 'hidden' || field.type === 'key') && !showHidden[field.id]}
+                  value={field.value}
+                  onChangeText={(txt) => handleUpdateField(field.id, 'value', txt)}
+                  onFocus={onInputFocus}
+                />
+                {(field.type === 'hidden' || field.type === 'key') && (
+                  <TouchableOpacity
+                    style={styles.eyeBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.6}
+                    onPress={() =>
+                      setShowHidden((prev) => ({ ...prev, [field.id]: !prev[field.id] }))
+                    }
+                  >
+                    {showHidden[field.id] ? (
+                      <EyeOff color="#8E8E93" size={18} />
+                    ) : (
+                      <Eye color="#8E8E93" size={18} />
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         );
       })}
@@ -338,6 +483,37 @@ export const CustomFieldEditor: React.FC<CustomFieldEditorProps> = ({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* Date / Time Picker Modal */}
+      {activePickerField && (
+        <DatePickerModal
+          visible={!!activePickerField}
+          mode={activePickerField.mode}
+          title={activePickerField.title}
+          initialValue={activePickerField.value}
+          accentColor={accentColor}
+          onClose={() => setActivePickerField(null)}
+          onSelect={(val) => {
+            handleUpdateField(activePickerField.id, 'value', val);
+            setActivePickerField(null);
+          }}
+        />
+      )}
+
+      {activeDropdownField && (
+        <DropdownPickerModal
+          visible={activeDropdownField !== null}
+          title={activeDropdownField.title}
+          mode={activeDropdownField.mode}
+          options={activeDropdownField.options}
+          selectedValue={activeDropdownField.value}
+          accentColor={accentColor}
+          onSelect={(val) => {
+            handleUpdateField(activeDropdownField.id, 'value', val);
+          }}
+          onClose={() => setActiveDropdownField(null)}
+        />
+      )}
     </View>
   );
 };
@@ -455,11 +631,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E5EA',
   },
+  valueRowMultiline: {
+    alignItems: 'flex-start',
+    paddingVertical: 4,
+  },
   valueInput: {
     flex: 1,
     color: '#000000',
     fontSize: 14,
     paddingVertical: 9,
+  },
+  valueInputMultiline: {
+    minHeight: 68,
+    textAlignVertical: 'top',
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   monoText: {
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
@@ -545,5 +731,75 @@ const styles = StyleSheet.create({
   typeOptionDesc: {
     fontSize: 12,
     color: '#8E8E93',
+  },
+  textareaEditorBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    padding: 10,
+  },
+  textareaEditorInput: {
+    fontSize: 14,
+    color: '#000000',
+    minHeight: 68,
+    textAlignVertical: 'top',
+    lineHeight: 20,
+    padding: 0,
+  },
+  textareaEditorFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E5EA',
+    paddingTop: 6,
+    marginTop: 6,
+  },
+  textareaEditorCounter: {
+    fontSize: 11,
+    color: '#8E8E93',
+  },
+  pickerValueButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  pickerValueText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  pickerPlaceholderText: {
+    color: '#8E8E93',
+    fontWeight: '400',
+  },
+  pickerSubText: {
+    fontSize: 11,
+    color: '#8E8E93',
+    marginTop: 1,
+  },
+  multiSelectChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  multiSelectChip: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  multiSelectChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
 });

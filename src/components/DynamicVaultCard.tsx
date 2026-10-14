@@ -28,6 +28,8 @@ import { HapticService } from '../core/haptics';
 import { CardNetworkLogo } from '../card-validator/logos';
 import { CardNetwork } from '../card-validator/types';
 import { resolveCardTheme } from '../card-validator/theme';
+import { useVault } from '../context/VaultContext';
+import { getCategoryDetails } from '../theme/categoryColors';
 
 // Curated Fallback Gradients (retained for backward compatibility)
 export const CARD_GRADIENTS = [
@@ -87,6 +89,7 @@ export const DynamicVaultCard: React.FC<DynamicVaultCardProps> = ({
   onLongPress,
   onRequireAuth,
 }) => {
+  const { customCategories } = useVault();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -524,7 +527,105 @@ export const DynamicVaultCard: React.FC<DynamicVaultCardProps> = ({
     );
   }
 
-    // 4. Fallback for any other category item (renders as Note)
+    // 4. Custom Categories: Render with category theme squircle, badge, and custom fields preview
+    const categoryDetails = getCategoryDetails(item.category, customCategories);
+    if (categoryDetails.isCustom) {
+      const IconComponent = categoryDetails.icon;
+      return (
+        <TouchableOpacity
+          style={styles.loginCardContainer}
+          onPress={onPress}
+          onLongPress={handleCardLongPress}
+          delayLongPress={300}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel={`${categoryDetails.name} ${item.title}`}
+        >
+          <View style={styles.loginHeaderRow}>
+            <View
+              style={[
+                styles.loginAvatarSquircle,
+                { backgroundColor: categoryDetails.bgTint },
+              ]}
+            >
+              <IconComponent size={17} color={categoryDetails.color} strokeWidth={2.4} />
+            </View>
+            <View style={styles.loginTitleGroup}>
+              <Text style={styles.loginTitleText} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={[styles.domainText, { color: categoryDetails.color, fontWeight: '600' }]} numberOfLines={1}>
+                {categoryDetails.name}
+              </Text>
+            </View>
+            {item.isPinned && (
+              <View style={styles.cardPinBadge}>
+                <Pin size={11} color="#D97706" fill="#D97706" />
+              </View>
+            )}
+          </View>
+
+          {/* Custom Fields Preview */}
+          {item.customFields && item.customFields.length > 0 ? (
+            <View style={styles.credentialBox}>
+              {item.customFields.slice(0, 2).map((cf) => {
+                const isHidden = cf.type === 'hidden' || cf.type === 'key';
+                return (
+                  <View key={cf.id} style={styles.credentialRow}>
+                    <View style={styles.credentialTextCol}>
+                      <Text style={styles.credentialLabel}>{(cf.label || cf.type).toUpperCase()}</Text>
+                      <Text style={styles.credentialValue} numberOfLines={1}>
+                        {isHidden ? '••••••••' : cf.value || '—'}
+                      </Text>
+                    </View>
+                    {cf.value ? (
+                      <TouchableOpacity
+                        style={[styles.copyBtn, copiedKey === cf.id && styles.copyBtnSuccess]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleCopy(cf.value, cf.id);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        {copiedKey === cf.id ? (
+                          <Check size={12} color="#10B981" strokeWidth={2.6} />
+                        ) : (
+                          <Copy size={12} color="#8E8E93" />
+                        )}
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : item.notes ? (
+            <Text style={[styles.noteBodyText, { paddingHorizontal: 12, paddingBottom: 6 }]} numberOfLines={2}>
+              {item.notes}
+            </Text>
+          ) : null}
+
+          {/* Footer: Tags or Protected Indicator */}
+          <View style={styles.loginFooterRow}>
+            {item.tags && item.tags.length > 0 ? (
+              <View style={styles.tagsContainer}>
+                {item.tags.slice(0, 2).map((tag) => (
+                  <View key={tag} style={styles.tagPill}>
+                    <Text style={styles.tagText}>#{tag}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.securityIndicator}>
+                <ShieldCheck size={11} color={categoryDetails.color} />
+                <Text style={styles.securityText}>Protected</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
+    // 5. Fallback for any other category item (renders as Note)
     return (
       <TouchableOpacity
         style={[styles.noteCardContainer, { borderLeftColor: '#7C4DFF' }]}

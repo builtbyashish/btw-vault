@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   ChevronRight,
   Lock,
@@ -66,6 +66,12 @@ export default function SettingsScreen() {
     checkBiometrics();
     loadCloudStatus();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadCloudStatus();
+    }, [])
+  );
 
   const loadCloudStatus = async () => {
     try {
@@ -164,17 +170,6 @@ export default function SettingsScreen() {
   };
 
   const performCloudBackup = async () => {
-    const isAuthorized = await requireAuth(
-      'Enter your master password to create an encrypted Google Drive backup.',
-      {
-        title: 'Confirm Master Password',
-        confirmButtonText: 'Verify & Back Up',
-        allowBiometric: false,
-      }
-    );
-
-    if (!isAuthorized) return;
-
     setIsBackingUp(true);
     try {
       const armored = await ExportImportService.getArmoredVaultBackup();
@@ -191,65 +186,6 @@ export default function SettingsScreen() {
       Alert.alert('Backup Failed', e.message || 'Could not upload backup to Google Drive.');
     } finally {
       setIsBackingUp(false);
-    }
-  };
-
-  const handleCloudRestoreInSettings = async () => {
-    const isAuthorized = await requireAuth(
-      'Enter your master password to restore from Google Drive.',
-      {
-        title: 'Confirm Master Password',
-        confirmButtonText: 'Continue to Restore',
-        allowBiometric: false,
-      }
-    );
-
-    if (!isAuthorized) return;
-
-    setIsCloudLoading(true);
-    try {
-      const meta = await GoogleDriveBackupService.fetchBackupMetadata();
-      if (!meta) {
-        Alert.alert('No Backup Found', 'No backup file was found in your Google Drive app storage.');
-        return;
-      }
-
-      Alert.alert(
-        'Restore From Google Drive?',
-        `Found encrypted backup from:\n${formatBackupTime(meta.modifiedTime)} (${formatBytes(meta.sizeBytes)})\n\nThis will replace your current local vault items. You will need to unlock with the backup's master password.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Restore',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                const armored = await GoogleDriveBackupService.downloadBackup();
-                const parsed = ExportImportService.parseBackupContent(armored);
-                const success = await importVaultBackup(parsed.config, parsed.payload);
-                if (success) {
-                  await HapticService.success();
-                  Alert.alert(
-                    'Restore Successful',
-                    'Vault restored from Google Drive! Please enter your master password to unlock.'
-                  );
-                  router.replace('/unlock');
-                } else {
-                  throw new Error('Failed to import vault backup');
-                }
-              } catch (err: any) {
-                await HapticService.warning();
-                Alert.alert('Restore Failed', err.message || 'Could not restore backup.');
-              }
-            },
-          },
-        ]
-      );
-    } catch (e: any) {
-      await HapticService.warning();
-      Alert.alert('Restore Failed', e.message || 'Could not check cloud backup.');
-    } finally {
-      setIsCloudLoading(false);
     }
   };
 
@@ -354,7 +290,7 @@ export default function SettingsScreen() {
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       
-      <Text style={styles.sectionHeader}>Security</Text>
+      <Text style={[styles.sectionHeader, styles.firstSectionHeader]}>Security</Text>
       <View style={styles.card}>
         {biometricAvailable && (
           <>
@@ -574,27 +510,6 @@ export default function SettingsScreen() {
           </View>
           <ChevronRight color="#C7C7CC" size={20} />
         </TouchableOpacity>
-
-        {cloudStatus.isConnected && (
-          <>
-            <View style={styles.rowSeparator} />
-
-            {/* Restore from Google Drive */}
-            <TouchableOpacity
-              style={styles.row}
-              onPress={handleCloudRestoreInSettings}
-              activeOpacity={0.6}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowTitle}>Restore from Google Drive</Text>
-                <Text style={styles.rowSubtitle}>
-                  Download and decrypt existing cloud backup
-                </Text>
-              </View>
-              <ChevronRight color="#C7C7CC" size={20} />
-            </TouchableOpacity>
-          </>
-        )}
       </View>
 
       <Text style={styles.sectionHeader}>Data & Storage</Text>
@@ -620,6 +535,23 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      <Text style={styles.sectionHeader}>About</Text>
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => router.push('/settings/about')}
+          activeOpacity={0.5}
+        >
+          <View style={styles.rowContent}>
+            <Text style={styles.rowTitle}>About btw vault</Text>
+            <Text style={styles.rowSubtitle}>
+              Zero-knowledge architecture, features & by Ashish Ranjan
+            </Text>
+          </View>
+          <ChevronRight color="#C7C7CC" size={20} />
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.sectionHeader}>Danger Zone</Text>
       <View style={styles.card}>
         <TouchableOpacity style={styles.row} onPress={handleWipeVault} activeOpacity={0.5}>
@@ -630,9 +562,13 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>btw vault v1.1.1</Text>
-      </View>
+      <TouchableOpacity
+        style={styles.footer}
+        onPress={() => router.push('/settings/about')}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.footerText}>btw vault v1.2.0 • Tap for architecture & about</Text>
+      </TouchableOpacity>
     </ScrollView>
     {AuthModal}
     <WipeVaultModal
@@ -676,7 +612,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
   },
   content: {
-    paddingVertical: 24,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+  firstSectionHeader: {
+    marginTop: 8,
   },
   sectionHeader: {
     fontSize: 13,

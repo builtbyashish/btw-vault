@@ -1,20 +1,48 @@
-export type ItemCategory = 'login' | 'card' | 'note' | 'other';
+export type ItemCategory = 'login' | 'card' | 'note' | 'other' | (string & {});
 
 export type CustomFieldType =
   | 'text'
+  | 'textarea'
+  | 'select'
+  | 'multiselect'
   | 'number'
   | 'link'
   | 'url'
   | 'date'
   | 'time'
   | 'email'
-  | 'hidden';
+  | 'hidden'
+  | 'key'
+  | 'payment';
+
+export interface FieldSchemaTemplate {
+  id: string;
+  label: string;
+  type: CustomFieldType;
+  required?: boolean;
+  placeholder?: string;
+  defaultValue?: string;
+  options?: string[];
+}
+
+export interface CustomCategoryDefinition {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  bgTint: string;
+  fields: FieldSchemaTemplate[];
+  isBuiltin?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface CustomField {
   id: string;
   label: string;
   value: string;
   type: CustomFieldType;
+  options?: string[];
 }
 
 export interface NoteSection {
@@ -28,6 +56,7 @@ import { CardNetwork } from '../card-validator/types';
 export interface CardDetails {
   cardholderName?: string;
   cardNumber?: string;
+  cardNumberType?: 'full' | 'last4';
   expiryDate?: string; // MM/YY
   cvv?: string;
   pin?: string;
@@ -77,6 +106,8 @@ export interface VaultConfig {
   biometricEnabled: boolean;
   autoLockMinutes: number;
   updatedAt: string;
+  customCategories?: CustomCategoryDefinition[];
+  pinnedCategoryIds?: string[];
 }
 
 export type VaultStatus = 'uninitialized' | 'locked' | 'unlocked' | 'authenticating';

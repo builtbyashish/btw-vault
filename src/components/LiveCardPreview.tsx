@@ -9,6 +9,7 @@ import { resolveCardTheme } from '../card-validator/theme';
 export interface LiveCardPreviewProps {
   title?: string;
   cardNumber?: string;
+  cardNumberType?: 'full' | 'last4';
   cardholderName?: string;
   expiryDate?: string;
   network?: CardNetwork | 'other' | string;
@@ -17,6 +18,7 @@ export interface LiveCardPreviewProps {
 export const LiveCardPreview: React.FC<LiveCardPreviewProps> = ({
   title,
   cardNumber = '',
+  cardNumberType = 'last4',
   cardholderName = '',
   expiryDate = '',
   network = 'unknown',
@@ -29,7 +31,12 @@ export const LiveCardPreview: React.FC<LiveCardPreviewProps> = ({
   const rawClean = cardNumber.replace(/\s+/g, '');
   let displayCardNumber = '••••  ••••  ••••  ••••';
 
-  if (rawClean.length > 0) {
+  const isLast4 = cardNumberType === 'last4' || (rawClean.length > 0 && rawClean.length <= 4 && cardNumberType !== 'full');
+
+  if (isLast4) {
+    const p4 = rawClean ? rawClean.padEnd(4, '•') : '••••';
+    displayCardNumber = `••••  ••••  ••••  ${p4}`;
+  } else if (rawClean.length > 0) {
     if (network === 'amex') {
       // 4-6-5 format
       const p1 = rawClean.slice(0, 4).padEnd(4, '•');
