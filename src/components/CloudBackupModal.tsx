@@ -39,7 +39,6 @@ interface CloudBackupModalProps {
   isLoading?: boolean;
   onSelectNetworkPref: (pref: 'any' | 'wifi_only') => void;
   onSelectSyncFrequency: (freq: 'off' | 'on_change') => void;
-  onSwitchAccount: () => void;
   onUnlinkAccount: () => void;
   onLinkAccount: () => void;
 }
@@ -54,7 +53,6 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
   isLoading = false,
   onSelectNetworkPref,
   onSelectSyncFrequency,
-  onSwitchAccount,
   onUnlinkAccount,
   onLinkAccount,
 }) => {
@@ -70,14 +68,6 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
     await HapticService.selection();
     onSelectSyncFrequency(freq);
     onClose();
-  };
-
-  const handleSwitch = async () => {
-    await HapticService.selection();
-    onClose();
-    setTimeout(() => {
-      onSwitchAccount();
-    }, 150);
   };
 
   const handleUnlink = async () => {
@@ -310,24 +300,6 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
                     </View>
 
                     <View style={styles.optionsList}>
-                      {/* Switch Account */}
-                      <TouchableOpacity
-                        style={styles.optionCard}
-                        onPress={handleSwitch}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.optionIconBox}>
-                          <RefreshCw color="#0F172A" size={19} />
-                        </View>
-                        <View style={styles.optionContent}>
-                          <Text style={styles.optionTitle}>Switch Account</Text>
-                          <Text style={styles.optionDesc}>
-                            Sign in with a different Google account
-                          </Text>
-                        </View>
-                        <ChevronRight color="#CBD5E1" size={18} />
-                      </TouchableOpacity>
-
                       {/* Unlink Account */}
                       <TouchableOpacity
                         style={[styles.optionCard, styles.optionCardDanger]}

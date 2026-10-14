@@ -658,9 +658,6 @@ export default function SettingsScreen() {
         const updated = await GoogleDriveBackupService.getStatus();
         setCloudStatus(updated);
       }}
-      onSwitchAccount={async () => {
-        await handleConnectGoogleDrive();
-      }}
       onUnlinkAccount={handleDisconnectGoogleDrive}
       onLinkAccount={async () => {
         const connected = await handleConnectGoogleDrive();
