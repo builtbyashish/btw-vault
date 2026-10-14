@@ -60,7 +60,6 @@ jobs:
         run: |
           echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '569470226281-04u4ajijsqqbaa90r9heo410mbv9n453.apps.googleusercontent.com' }}" >> .env
           echo "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '569470226281-04u4ajijsqqbaa90r9heo410mbv9n453.apps.googleusercontent.com' }}" >> .env
-          echo "EXPO_PUBLIC_GOOGLE_CLIENT_SECRET=${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_SECRET || '' }}" >> .env
           echo "Configured .env with Google OAuth Client IDs for release APK."
 
       - name: Build Android Release APK

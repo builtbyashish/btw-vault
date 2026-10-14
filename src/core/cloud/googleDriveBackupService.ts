@@ -62,6 +62,20 @@ function toBase64Url(bytes: Uint8Array): string {
     .replace(/=+$/, '');
 }
 
+// Safely lazy-load native Google Signin without crashing in Expo Go
+let GoogleSigninModule: typeof import('@react-native-google-signin/google-signin') | null = null;
+function getGoogleSignin(): typeof import('@react-native-google-signin/google-signin') | null {
+  if (!GoogleSigninModule) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      GoogleSigninModule = require('@react-native-google-signin/google-signin');
+    } catch {
+      GoogleSigninModule = null;
+    }
+  }
+  return GoogleSigninModule;
+}
+
 export class GoogleDriveBackupService {
   /**
    * Check if running inside the Expo Go client app
@@ -71,9 +85,13 @@ export class GoogleDriveBackupService {
   }
 
   /**
-   * Check if a Google Client ID has been configured in the environment
+   * Check if Google Drive backup is ready to authenticate.
+   * On native Android, Google Play Services verifies via APK keystore SHA-1 (0 secret needed).
    */
   static isConfigured(): boolean {
+    if (Platform.OS === 'android' && !this.isExpoGo()) {
+      return true;
+    }
     return Boolean(this.getClientId());
   }
 
@@ -220,12 +238,64 @@ export class GoogleDriveBackupService {
   }
 
   /**
-   * Authenticate with Google using OAuth 2.0 PKCE and store tokens
+   * Authenticate with Google using native Google Play Services (0 secrets) on Android,
+   * or OAuth 2.0 PKCE browser session on web/dev environments.
    */
   static async authenticate(): Promise<GoogleAccountInfo> {
-    if (this.isExpoGo() && !process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
+    const nativeModule = getGoogleSignin();
+    if (Platform.OS === 'android' && !this.isExpoGo() && nativeModule) {
+      const { GoogleSignin, statusCodes } = nativeModule;
+      try {
+        GoogleSignin.configure({
+          scopes: [
+            'https://www.googleapis.com/auth/drive.appdata',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile',
+          ],
+        });
+
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        const signInResult = await GoogleSignin.signIn();
+        if (signInResult.type !== 'success') {
+          throw new Error('Google Sign-In canceled.');
+        }
+
+        const tokens = await GoogleSignin.getTokens();
+        const accessToken = tokens.accessToken;
+        if (!accessToken) {
+          throw new Error('Could not retrieve access token from Google Play Services.');
+        }
+
+        const accountInfo: GoogleAccountInfo = {
+          email: signInResult.data.user.email,
+          name: signInResult.data.user.name || undefined,
+          picture: signInResult.data.user.photo || undefined,
+        };
+
+        await SecureStore.setItemAsync(KEY_ACCESS_TOKEN, accessToken);
+        await SecureStore.setItemAsync(KEY_USER_EMAIL, accountInfo.email);
+        if (accountInfo.name) {
+          await SecureStore.setItemAsync(KEY_USER_NAME, accountInfo.name);
+        }
+
+        return accountInfo;
+      } catch (e: any) {
+        if (e.code === statusCodes?.SIGN_IN_CANCELLED) {
+          throw new Error('Google Sign-In was canceled.');
+        }
+        if (e.code === statusCodes?.IN_PROGRESS) {
+          throw new Error('Google Sign-In is already in progress.');
+        }
+        if (e.code === statusCodes?.PLAY_SERVICES_NOT_AVAILABLE) {
+          throw new Error('Google Play Services is not available on this device.');
+        }
+        throw new Error(e.message || 'Failed to authenticate with Google Play Services.');
+      }
+    }
+
+    if (this.isExpoGo()) {
       throw new Error(
-        'Testing Google Drive backup inside Expo Go requires a Web Client ID in Google Cloud Console. In your native Android build (APK), your Android Client ID works directly.'
+        'Testing Google Drive backup with native Google Play Services requires the installed Android APK build. Expo Go sandbox does not include native Play Services.'
       );
     }
 
@@ -359,6 +429,31 @@ export class GoogleDriveBackupService {
    * Retrieves a valid access token, automatically refreshing it if expired
    */
   static async getValidAccessToken(): Promise<string> {
+    const nativeModule = getGoogleSignin();
+    if (Platform.OS === 'android' && !this.isExpoGo() && nativeModule) {
+      const { GoogleSignin } = nativeModule;
+      try {
+        const tokens = await GoogleSignin.getTokens();
+        if (tokens.accessToken) {
+          await SecureStore.setItemAsync(KEY_ACCESS_TOKEN, tokens.accessToken);
+          return tokens.accessToken;
+        }
+      } catch {
+        try {
+          const silentRes = await GoogleSignin.signInSilently();
+          if (silentRes.type === 'success') {
+            const freshTokens = await GoogleSignin.getTokens();
+            if (freshTokens.accessToken) {
+              await SecureStore.setItemAsync(KEY_ACCESS_TOKEN, freshTokens.accessToken);
+              return freshTokens.accessToken;
+            }
+          }
+        } catch (silentErr) {
+          console.warn('Silent Google Play Services refresh failed:', silentErr);
+        }
+      }
+    }
+
     const accessToken = await SecureStore.getItemAsync(KEY_ACCESS_TOKEN);
     const expiryStr = await SecureStore.getItemAsync(KEY_TOKEN_EXPIRY);
     const refreshToken = await SecureStore.getItemAsync(KEY_REFRESH_TOKEN);
@@ -372,6 +467,7 @@ export class GoogleDriveBackupService {
     }
 
     if (!refreshToken) {
+      if (accessToken) return accessToken;
       throw new Error('Google session expired. Please connect your Google account again.');
     }
 
@@ -563,6 +659,15 @@ export class GoogleDriveBackupService {
    * Disconnect Google account and remove local tokens and credentials
    */
   static async disconnect(): Promise<void> {
+    const nativeModule = getGoogleSignin();
+    if (Platform.OS === 'android' && !this.isExpoGo() && nativeModule) {
+      try {
+        await nativeModule.GoogleSignin.signOut();
+      } catch (e) {
+        console.warn('Google Play Services sign out error:', e);
+      }
+    }
+
     try {
       const accessToken = await SecureStore.getItemAsync(KEY_ACCESS_TOKEN);
       if (accessToken) {

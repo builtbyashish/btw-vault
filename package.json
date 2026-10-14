@@ -1,6 +1,6 @@
 {
   "name": "offline-vault",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -12,6 +12,7 @@
     "@noble/ciphers": "^1.2.1",
     "@noble/hashes": "^1.7.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-google-signin/google-signin": "^16.1.5",
     "expo": "~57.0.27",
     "expo-auth-session": "~57.0.15",
     "expo-clipboard": "~57.0.2",
