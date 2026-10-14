@@ -631,7 +631,7 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>btw vault v1.1.0</Text>
+        <Text style={styles.footerText}>btw vault v1.1.1</Text>
       </View>
     </ScrollView>
     {AuthModal}

@@ -78,54 +78,24 @@ export class GoogleDriveBackupService {
   }
 
   /**
-   * Retrieve platform-specific Client ID from environment variables.
-   * Uses Web Client ID in Expo Go (via auth.expo.io proxy) and native Android Client ID in native builds.
+   * Retrieve Google OAuth Client ID from environment variables.
+   * Uses the Web Client ID for universal compatibility across APK and Expo Go.
    */
   static getClientId(): string {
-    if (this.isExpoGo()) {
-      return (
-        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
-        process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||
-        ''
-      );
-    }
-    if (Platform.OS === 'android') {
-      return (
-        process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
-        process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||
-        ''
-      );
-    }
-    if (Platform.OS === 'ios') {
-      return (
-        process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
-        process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||
-        ''
-      );
-    }
     return (
       process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
       process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||
+      process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
       ''
     );
   }
 
   /**
-   * Generates the OAuth redirect URI.
-   * In Expo Go: uses Expo's auth proxy (https://auth.expo.io/@the.ashish/btw-vault).
-   * In Native Android: uses native package custom scheme (com.btwvault.app:/oauthredirect).
+   * Generates the OAuth redirect URI matching the Google Cloud Console Web Application configuration:
+   * https://auth.expo.io/@the.ashish/btw-vault
    */
   static getRedirectUri(): string {
-    if (this.isExpoGo()) {
-      return 'https://auth.expo.io/@the.ashish/btw-vault';
-    }
-    if (Platform.OS === 'android') {
-      return 'com.btwvault.app:/oauthredirect';
-    }
-    return makeRedirectUri({
-      scheme: 'btw-vault',
-      path: 'oauthredirect',
-    });
+    return 'https://auth.expo.io/@the.ashish/btw-vault';
   }
 
   /**
@@ -286,16 +256,15 @@ export class GoogleDriveBackupService {
     AppSecurityService.setSystemActivityActive(true);
     let result: WebBrowser.WebBrowserAuthSessionResult;
     try {
-      if (this.isExpoGo()) {
-        const returnUrl = makeRedirectUri({ path: 'oauthredirect' });
-        const startUrl = `https://auth.expo.io/@the.ashish/btw-vault/start?${new URLSearchParams({
-          authUrl,
-          returnUrl,
-        }).toString()}`;
-        result = await WebBrowser.openAuthSessionAsync(startUrl, returnUrl);
-      } else {
-        result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-      }
+      const returnUrl = makeRedirectUri({
+        scheme: 'btw-vault',
+        path: 'oauthredirect',
+      });
+      const startUrl = `https://auth.expo.io/@the.ashish/btw-vault/start?${new URLSearchParams({
+        authUrl,
+        returnUrl,
+      }).toString()}`;
+      result = await WebBrowser.openAuthSessionAsync(startUrl, returnUrl);
     } finally {
       AppSecurityService.setSystemActivityActive(false);
     }
@@ -335,6 +304,9 @@ export class GoogleDriveBackupService {
       grant_type: 'authorization_code',
       redirect_uri: redirectUri,
     });
+    if (process.env.EXPO_PUBLIC_GOOGLE_CLIENT_SECRET) {
+      tokenParams.append('client_secret', process.env.EXPO_PUBLIC_GOOGLE_CLIENT_SECRET);
+    }
 
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -410,6 +382,9 @@ export class GoogleDriveBackupService {
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
     });
+    if (process.env.EXPO_PUBLIC_GOOGLE_CLIENT_SECRET) {
+      refreshParams.append('client_secret', process.env.EXPO_PUBLIC_GOOGLE_CLIENT_SECRET);
+    }
 
     const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
