@@ -25,7 +25,6 @@ export default function UnlockScreen() {
     unlockWithBiometrics,
     biometricEnabled,
     wipeVault,
-    isLoading,
     error,
   } = useVault();
   const router = useRouter();
@@ -35,7 +34,10 @@ export default function UnlockScreen() {
   const [localError, setLocalError] = useState('');
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isBiometricPrompting, setIsBiometricPrompting] = useState(false);
 
+  const hasAutoPromptedBiometrics = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -62,35 +64,52 @@ export default function UnlockScreen() {
   }, []);
 
   useEffect(() => {
-    if (biometricEnabled) {
-      handleBiometricUnlock();
+    if (biometricEnabled && !hasAutoPromptedBiometrics.current) {
+      hasAutoPromptedBiometrics.current = true;
+      const timer = setTimeout(() => {
+        handleBiometricUnlock();
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [biometricEnabled]);
 
   const handleBiometricUnlock = async () => {
-    const success = await unlockWithBiometrics();
-    if (success) {
-      await HapticService.success();
-      router.replace('/(tabs)');
-    } else {
-      await HapticService.warning();
+    if (isBiometricPrompting || isUnlocking) return;
+    setIsBiometricPrompting(true);
+    setLocalError('');
+    try {
+      const success = await unlockWithBiometrics();
+      if (success) {
+        await HapticService.success();
+        router.replace('/(tabs)');
+      } else {
+        await HapticService.warning();
+      }
+    } finally {
+      setIsBiometricPrompting(false);
     }
   };
 
   const handlePasswordUnlock = async () => {
+    if (isUnlocking) return;
     setLocalError('');
-    if (!password) {
+    if (!password.trim()) {
       await HapticService.warning();
       setLocalError('Please enter your master password.');
       return;
     }
 
-    const success = await unlockWithPassword(password);
-    if (success) {
-      await HapticService.success();
-      router.replace('/(tabs)');
-    } else {
-      await HapticService.warning();
+    setIsUnlocking(true);
+    try {
+      const success = await unlockWithPassword(password);
+      if (success) {
+        await HapticService.success();
+        router.replace('/(tabs)');
+      } else {
+        await HapticService.warning();
+      }
+    } finally {
+      setIsUnlocking(false);
     }
   };
 
@@ -200,13 +219,13 @@ export default function UnlockScreen() {
               <TouchableOpacity
                 style={[
                   styles.unlockBtn,
-                  (isLoading || !password) && styles.unlockBtnDisabled,
+                  (isUnlocking || !password.trim()) && styles.unlockBtnDisabled,
                 ]}
                 onPress={handlePasswordUnlock}
-                disabled={isLoading || !password}
+                disabled={isUnlocking || !password.trim()}
                 activeOpacity={0.85}
               >
-                {isLoading ? (
+                {isUnlocking ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <Text style={styles.unlockBtnText}>Unlock Vault</Text>
@@ -216,13 +235,22 @@ export default function UnlockScreen() {
               {/* Biometric Button (if enabled) */}
               {biometricEnabled ? (
                 <TouchableOpacity
-                  style={styles.biometricBtn}
+                  style={[
+                    styles.biometricBtn,
+                    isBiometricPrompting && styles.biometricBtnActive,
+                  ]}
                   onPress={handleBiometricUnlock}
-                  disabled={isLoading}
+                  disabled={isBiometricPrompting || isUnlocking}
                   activeOpacity={0.7}
                 >
-                  <Fingerprint color="#0F172A" size={19} />
-                  <Text style={styles.biometricText}>Unlock with Biometrics</Text>
+                  {isBiometricPrompting ? (
+                    <ActivityIndicator color="#0F172A" size="small" style={{ marginRight: 8 }} />
+                  ) : (
+                    <Fingerprint color="#0F172A" size={19} style={{ marginRight: 8 }} />
+                  )}
+                  <Text style={styles.biometricText}>
+                    {isBiometricPrompting ? 'Verifying Biometrics...' : 'Unlock with Biometrics'}
+                  </Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -379,6 +407,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginTop: 12,
+  },
+  biometricBtnActive: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
   },
   biometricText: {
     color: '#0F172A',

@@ -151,10 +151,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5EA',
   },
   headerTitle: {
-    fontWeight: '800',
-    fontSize: 28,
+    fontWeight: '600',
+    fontSize: 18,
     color: '#000000',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   headerLogoText: {
     fontFamily: 'GrandHotel',
@@ -165,10 +165,10 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   headerCategoryTitle: {
-    fontWeight: '800',
-    fontSize: 24,
+    fontWeight: '600',
+    fontSize: 18,
     color: '#000000',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   hamburgerBtn: {
     width: 44,

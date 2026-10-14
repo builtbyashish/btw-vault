@@ -2,6 +2,7 @@ package com.btwvault.app
 
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -17,6 +18,12 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+
+    // Hardware-level security: Block screenshots, screen recording, and task switcher preview
+    window.setFlags(
+      WindowManager.LayoutParams.FLAG_SECURE,
+      WindowManager.LayoutParams.FLAG_SECURE
+    )
   }
 
   /**

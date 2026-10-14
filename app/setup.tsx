@@ -23,12 +23,14 @@ import {
   ShieldAlert,
   FolderArchive,
   Fingerprint,
+  Cloud,
 } from 'lucide-react-native';
 import { useVault } from '../src/context/VaultContext';
 import { BiometricService } from '../src/core/security/biometricService';
 import { BtwVaultLogo } from '../src/components/BtwVaultLogo';
 import { HapticService } from '../src/core/haptics';
 import { ExportImportService } from '../src/core/migration/exportImportService';
+import { GoogleDriveBackupService } from '../src/core/cloud/googleDriveBackupService';
 
 export default function SetupScreen() {
   const { setupVault, importVaultBackup, isLoading, error } = useVault();
@@ -42,6 +44,7 @@ export default function SetupScreen() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [localError, setLocalError] = useState('');
   const [focusedField, setFocusedField] = useState<'password' | 'confirm' | null>(null);
+  const [isCloudLoading, setIsCloudLoading] = useState(false);
 
   const confirmInputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -174,6 +177,89 @@ export default function SetupScreen() {
         },
       ]
     );
+  };
+
+  const handleGoogleDriveRestoreOnSetup = async () => {
+    if (!GoogleDriveBackupService.isConfigured()) {
+      Alert.alert(
+        'Google Drive Not Configured',
+        'Please ensure EXPO_PUBLIC_GOOGLE_CLIENT_ID is configured in your .env file.'
+      );
+      return;
+    }
+
+    setIsCloudLoading(true);
+    try {
+      const status = await GoogleDriveBackupService.getStatus();
+      if (!status.isConnected) {
+        await GoogleDriveBackupService.authenticate();
+      }
+
+      const meta = await GoogleDriveBackupService.fetchBackupMetadata();
+      if (!meta) {
+        Alert.alert(
+          'No Backup Found',
+          'No encrypted vault backup was found in the connected Google Drive account.'
+        );
+        return;
+      }
+
+      const dateStr = meta.modifiedTime
+        ? new Date(meta.modifiedTime).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'Unknown date';
+
+      const sizeStr = meta.sizeBytes
+        ? ` (${(meta.sizeBytes / 1024).toFixed(1)} KB)`
+        : '';
+
+      Alert.alert(
+        'Confirm Cloud Restore',
+        `Found valid encrypted backup created on:\n${dateStr}${sizeStr}\n\nRestore this vault to your device?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Restore Vault',
+            onPress: async () => {
+              try {
+                const armored = await GoogleDriveBackupService.downloadBackup();
+                const data = ExportImportService.parseBackupContent(armored);
+                const success = await importVaultBackup(data.config, data.payload);
+                if (success) {
+                  await HapticService.success();
+                  Alert.alert(
+                    'Restore Successful',
+                    'Vault restored! Please enter your master password to unlock.'
+                  );
+                  router.replace('/unlock');
+                } else {
+                  await HapticService.warning();
+                  Alert.alert('Restore Failed', 'Could not apply vault backup.');
+                }
+              } catch (restoreErr: any) {
+                await HapticService.warning();
+                Alert.alert(
+                  'Restore Failed',
+                  restoreErr.message || 'Could not download or restore cloud backup.'
+                );
+              }
+            },
+          },
+        ]
+      );
+    } catch (e: any) {
+      if (!e.message?.includes('canceled') && !e.message?.includes('dismissed')) {
+        await HapticService.warning();
+        Alert.alert('Cloud Restore Error', e.message || 'Could not connect to Google Drive.');
+      }
+    } finally {
+      setIsCloudLoading(false);
+    }
   };
 
   const displayError = localError || error;
@@ -387,11 +473,28 @@ export default function SetupScreen() {
             <TouchableOpacity
               style={styles.restoreBtn}
               onPress={handleImportBackupOnSetup}
-              disabled={isLoading}
+              disabled={isLoading || isCloudLoading}
               activeOpacity={0.7}
             >
               <FolderArchive color="#0F172A" size={18} style={styles.restoreIcon} />
               <Text style={styles.restoreBtnText}>Restore Existing .btw-vault Backup</Text>
+            </TouchableOpacity>
+
+            {/* Restore from Google Drive Button */}
+            <TouchableOpacity
+              style={[styles.restoreBtn, { marginTop: 10 }]}
+              onPress={handleGoogleDriveRestoreOnSetup}
+              disabled={isLoading || isCloudLoading}
+              activeOpacity={0.7}
+            >
+              {isCloudLoading ? (
+                <ActivityIndicator color="#0F172A" size="small" style={styles.restoreIcon} />
+              ) : (
+                <Cloud color="#0F172A" size={18} style={styles.restoreIcon} />
+              )}
+              <Text style={styles.restoreBtnText}>
+                {isCloudLoading ? 'Connecting to Drive...' : 'Restore from Google Drive'}
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

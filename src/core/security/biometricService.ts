@@ -25,19 +25,36 @@ export class BiometricService {
       if (!available) return false;
 
       AppSecurityService.setSystemActivityActive(true);
-      const result = await LocalAuthentication.authenticateAsync({
+
+      const authPromise = LocalAuthentication.authenticateAsync({
         promptMessage: reason,
         fallbackLabel: 'Use Master Password',
         cancelLabel: 'Cancel',
-        disableDeviceFallback: false,
+        disableDeviceFallback: true,
       });
 
+      // Timeout safeguard: resolve false if system dialog is killed or hangs
+      const timeoutPromise = new Promise<LocalAuthentication.LocalAuthenticationResult>((resolve) => {
+        setTimeout(() => resolve({ success: false, error: 'timeout' }), 25000);
+      });
+
+      const result = await Promise.race([authPromise, timeoutPromise]);
       return result.success;
     } catch {
       return false;
     } finally {
       AppSecurityService.setSystemActivityActive(false);
     }
+  }
+
+  /**
+   * Cancel any active biometric authentication prompt
+   */
+  static async cancelAuthentication(): Promise<void> {
+    try {
+      await LocalAuthentication.cancelAuthenticate();
+    } catch {}
+    AppSecurityService.setSystemActivityActive(false);
   }
 
   /**

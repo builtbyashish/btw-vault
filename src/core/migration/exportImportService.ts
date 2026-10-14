@@ -56,27 +56,40 @@ export class ExportImportService {
   }
 
   /**
+   * Builds an armored .btw-vault container string from config and payload
+   */
+  static buildArmoredBackup(config: VaultConfig, payload: EncryptedPayload): string {
+    const backupData: ExportBackupData = {
+      version: 1,
+      config,
+      payload,
+      exportedAt: new Date().toISOString(),
+    };
+    const rawJson = JSON.stringify(backupData);
+    const base64Armored = bytesToBase64(stringToBytes(rawJson));
+    return `${VAULT_ARMOR_HEADER}\n${base64Armored}\n${VAULT_ARMOR_FOOTER}`;
+  }
+
+  /**
+   * Loads current vault config + payload from storage and generates the armored container string
+   */
+  static async getArmoredVaultBackup(): Promise<string> {
+    const config = await VaultStorage.loadVaultConfig();
+    const payload = await VaultStorage.loadEncryptedVault();
+
+    if (!config || !payload) {
+      throw new Error('No vault data found to export');
+    }
+
+    return this.buildArmoredBackup(config, payload);
+  }
+
+  /**
    * Export encrypted vault backup file (.vault) directly to device storage
    */
   static async exportBackup(): Promise<ExportResult> {
     try {
-      const config = await VaultStorage.loadVaultConfig();
-      const payload = await VaultStorage.loadEncryptedVault();
-
-      if (!config || !payload) {
-        throw new Error('No vault data found to export');
-      }
-
-      const backupData: ExportBackupData = {
-        version: 1,
-        config,
-        payload,
-        exportedAt: new Date().toISOString(),
-      };
-
-      const rawJson = JSON.stringify(backupData);
-      const base64Armored = bytesToBase64(stringToBytes(rawJson));
-      const fileContent = `${VAULT_ARMOR_HEADER}\n${base64Armored}\n${VAULT_ARMOR_FOOTER}`;
+      const fileContent = await this.getArmoredVaultBackup();
 
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 10);
@@ -213,80 +226,87 @@ export class ExportImportService {
         }
       }
 
-      const content = rawContent.trim();
-      if (!content) {
-        throw new Error('The selected backup file is empty.');
-      }
-
-      let parsed: any;
-
-      // 1. Check for armored .btw-vault format
-      if (content.includes('BEGIN BTW VAULT BACKUP')) {
-        try {
-          const lines = content.split('\n');
-          const payloadLines = lines.filter(
-            (line) =>
-              !line.startsWith('-----BEGIN') &&
-              !line.startsWith('-----END') &&
-              line.trim().length > 0
-          );
-          const base64Data = payloadLines.join('').trim();
-          const decodedJson = bytesToString(base64ToBytes(base64Data));
-          parsed = JSON.parse(decodedJson);
-        } catch {
-          throw new Error('Failed to decrypt .btw-vault backup container. File may be corrupted.');
-        }
-      } else {
-        // 2. Direct JSON or raw Base64 (supporting legacy exports)
-        try {
-          parsed = JSON.parse(content);
-          if (typeof parsed === 'string') {
-            parsed = JSON.parse(parsed);
-          }
-        } catch {
-          try {
-            // Attempt raw base64 decode
-            const decoded = bytesToString(base64ToBytes(content));
-            parsed = JSON.parse(decoded);
-          } catch {
-            throw new Error('The selected file is not a valid .btw-vault or JSON backup document.');
-          }
-        }
-      }
-
-      const root = parsed.backup || parsed;
-      const config = root.config;
-      const payload = root.payload;
-
-      if (!config || !payload) {
-        throw new Error('Invalid vault backup: missing configuration or encrypted payload.');
-      }
-
-      if (!config.salt || !config.verification) {
-        throw new Error('Invalid vault backup: missing configuration salt or verification block.');
-      }
-
-      if (!payload.ciphertext || !payload.iv || !payload.tag) {
-        throw new Error('Invalid vault backup: missing encrypted ciphertext, IV, or auth tag.');
-      }
-
-      // Ensure salt is available
-      if (!payload.salt && config.salt) {
-        payload.salt = config.salt;
-      }
-      if (!config.salt && payload.salt) {
-        config.salt = payload.salt;
-      }
-
-      return {
-        version: 1,
-        config,
-        payload,
-        exportedAt: root.exportedAt || new Date().toISOString(),
-      };
+      return this.parseBackupContent(rawContent);
     } catch (e) {
       console.error('Import error:', e);
       throw e;
     }
+  }
+
+  /**
+   * Parses and validates raw backup content (armored .btw-vault or legacy JSON)
+   */
+  static parseBackupContent(rawContent: string): ExportBackupData {
+    const content = rawContent.trim();
+    if (!content) {
+      throw new Error('The selected backup file is empty.');
+    }
+
+    let parsed: any;
+
+    // 1. Check for armored .btw-vault format
+    if (content.includes('BEGIN BTW VAULT BACKUP')) {
+      try {
+        const lines = content.split('\n');
+        const payloadLines = lines.filter(
+          (line) =>
+            !line.startsWith('-----BEGIN') &&
+            !line.startsWith('-----END') &&
+            line.trim().length > 0
+        );
+        const base64Data = payloadLines.join('').trim();
+        const decodedJson = bytesToString(base64ToBytes(base64Data));
+        parsed = JSON.parse(decodedJson);
+      } catch {
+        throw new Error('Failed to decrypt .btw-vault backup container. File may be corrupted.');
+      }
+    } else {
+      // 2. Direct JSON or raw Base64 (supporting legacy exports)
+      try {
+        parsed = JSON.parse(content);
+        if (typeof parsed === 'string') {
+          parsed = JSON.parse(parsed);
+        }
+      } catch {
+        try {
+          // Attempt raw base64 decode
+          const decoded = bytesToString(base64ToBytes(content));
+          parsed = JSON.parse(decoded);
+        } catch {
+          throw new Error('The selected file is not a valid .btw-vault or JSON backup document.');
+        }
+      }
+    }
+
+    const root = parsed.backup || parsed;
+    const config = root.config;
+    const payload = root.payload;
+
+    if (!config || !payload) {
+      throw new Error('Invalid vault backup: missing configuration or encrypted payload.');
+    }
+
+    if (!config.salt || !config.verification) {
+      throw new Error('Invalid vault backup: missing configuration salt or verification block.');
+    }
+
+    if (!payload.ciphertext || !payload.iv || !payload.tag) {
+      throw new Error('Invalid vault backup: missing encrypted ciphertext, IV, or auth tag.');
+    }
+
+    // Ensure salt is available
+    if (!payload.salt && config.salt) {
+      payload.salt = config.salt;
+    }
+    if (!config.salt && payload.salt) {
+      config.salt = payload.salt;
+    }
+
+    return {
+      version: 1,
+      config,
+      payload,
+      exportedAt: root.exportedAt || new Date().toISOString(),
+    };
   }
 }

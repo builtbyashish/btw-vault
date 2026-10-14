@@ -5,12 +5,10 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "btw-vault",
+    "scheme": ["btw-vault", "com.btwvault.app"],
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
       "backgroundColor": "#0F172A"
     },
     "ios": {
@@ -43,7 +41,8 @@
       "expo-font",
       "expo-secure-store",
       "expo-sharing",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-web-browser"
     ]
   }
 }

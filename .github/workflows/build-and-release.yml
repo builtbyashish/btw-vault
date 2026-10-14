@@ -56,6 +56,12 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
+      - name: Configure environment (.env)
+        run: |
+          echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '569470226281-lihtu11d3kmqn9r2f50b3eqqvug4g81j.apps.googleusercontent.com' }}" >> .env
+          echo "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '569470226281-lihtu11d3kmqn9r2f50b3eqqvug4g81j.apps.googleusercontent.com' }}" >> .env
+          echo "Configured .env with Google OAuth Client IDs for release APK."
+
       - name: Build Android Release APK
         run: |
           cd android

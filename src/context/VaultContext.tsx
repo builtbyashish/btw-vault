@@ -7,6 +7,8 @@ import { SecureStorageService } from '../core/storage/secureStorageService';
 import { BiometricService } from '../core/security/biometricService';
 import { BiometricPromptService } from '../core/security/biometricPromptService';
 import { AppSecurityService } from '../core/security/appSecurityService';
+import { ExportImportService } from '../core/migration/exportImportService';
+import { GoogleDriveBackupService } from '../core/cloud/googleDriveBackupService';
 
 interface VaultContextType {
   status: VaultStatus;
@@ -251,15 +253,14 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const unlockWithBiometrics = async (): Promise<boolean> => {
-    setIsLoading(true);
     setError(null);
     try {
       const authenticated = await BiometricService.authenticate('Unlock btw vault');
       if (!authenticated) {
-        setError('Biometric authentication failed');
         return false;
       }
 
+      setIsLoading(true);
       const masterKey = await SecureStorageService.getMasterKeyForBiometric();
       if (!masterKey) {
         setError('Biometric token expired. Please enter master password.');
@@ -329,6 +330,12 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       );
       await VaultStorage.saveEncryptedVault(encryptedPayload);
       setItems(updatedItems);
+
+      // WhatsApp-style silent background cloud sync if enabled
+      GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
+        ExportImportService.getArmoredVaultBackup()
+      ).catch(() => {});
+
       return true;
     } catch (e: any) {
       setError(e.message || 'Failed to save item');

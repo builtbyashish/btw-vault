@@ -4,11 +4,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
+import { usePreventScreenCapture } from 'expo-screen-capture';
 import { Lock } from 'lucide-react-native';
 import { VaultProvider, useVault } from '../src/context/VaultContext';
 import { CreateTypeSheet } from '../src/components/CreateTypeSheet';
 import { BtwVaultLogo } from '../src/components/BtwVaultLogo';
 import { AppSecurityService } from '../src/core/security/appSecurityService';
+import * as WebBrowser from 'expo-web-browser';
+
+WebBrowser.maybeCompleteAuthSession();
 
 function RootNavigation() {
   const router = useRouter();
@@ -123,6 +127,8 @@ function RootNavigation() {
 }
 
 export default function RootLayout() {
+  usePreventScreenCapture();
+
   const [fontsLoaded] = useFonts({
     Outfit: require('../assets/fonts/Outfit.ttf'),
     GrandHotel: require('../assets/fonts/GrandHotel-Regular.ttf'),
