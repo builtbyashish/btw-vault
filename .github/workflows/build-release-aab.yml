@@ -6,7 +6,7 @@ on:
       tag_version:
         description: 'Git tag or branch to build (e.g. v1.3.0, main, develop)'
         required: true
-        default: 'v1.3.0'
+        default: 'main'
         type: string
 
 permissions:
@@ -18,6 +18,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
       - name: Checkout specified tag or branch
         uses: actions/checkout@v4
         with:
