@@ -35,6 +35,7 @@ import { CustomField, CustomFieldType } from '../types';
 import { DatePickerModal, formatFriendlyDate, formatFriendlyTime } from './DatePickerModal';
 import { DropdownPickerModal, parseMultiSelectValues } from './DropdownPickerModal';
 import { HapticService } from '../core/haptics';
+import { VAULT_LIMITS } from '../core/security/vaultLimits';
 
 interface CustomFieldEditorProps {
   fields: CustomField[];
@@ -278,6 +279,7 @@ export const CustomFieldEditor: React.FC<CustomFieldEditorProps> = ({
                 })`}
                 placeholderTextColor="#8E8E93"
                 value={field.label}
+                maxLength={VAULT_LIMITS.CUSTOM_FIELD_LABEL_MAX_LEN}
                 onChangeText={(txt) => handleUpdateField(field.id, 'label', txt)}
                 onFocus={onInputFocus}
               />
@@ -311,6 +313,7 @@ export const CustomFieldEditor: React.FC<CustomFieldEditorProps> = ({
                   placeholderTextColor="#8E8E93"
                   multiline
                   numberOfLines={3}
+                  maxLength={VAULT_LIMITS.CUSTOM_FIELD_TEXTAREA_MAX_LEN}
                   value={field.value}
                   onChangeText={(txt) => handleUpdateField(field.id, 'value', txt)}
                   onFocus={onInputFocus}
@@ -392,6 +395,15 @@ export const CustomFieldEditor: React.FC<CustomFieldEditorProps> = ({
                   ]}
                   placeholder={typeDef.placeholder}
                   placeholderTextColor="#8E8E93"
+                  maxLength={
+                    field.type === 'key'
+                      ? VAULT_LIMITS.CUSTOM_FIELD_KEY_MAX_LEN
+                      : field.type === 'url' || field.type === 'link'
+                      ? VAULT_LIMITS.URL_MAX_LEN
+                      : field.type === 'email'
+                      ? VAULT_LIMITS.USERNAME_MAX_LEN
+                      : VAULT_LIMITS.CUSTOM_FIELD_VALUE_MAX_LEN
+                  }
                   keyboardType={typeDef.keyboardType || 'default'}
                   autoCapitalize={
                     field.type === 'email' || field.type === 'url' || field.type === 'link' || field.type === 'key'

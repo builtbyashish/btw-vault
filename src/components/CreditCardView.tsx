@@ -138,16 +138,16 @@ export const CreditCardView: React.FC<CreditCardViewProps> = ({
   const first4 = rawClean.length >= 8 ? rawClean.slice(0, 4) : '••••';
 
   const maskedDisplay = isLast4
-    ? `••••  ••••  ••••  ${last4}`
+    ? `•••• •••• •••• ${last4}`
     : rawClean.length >= 8
-    ? `${first4}  ••••  ••••  ${last4}`
-    : `••••  ••••  ••••  ${last4}`;
+    ? `${first4} •••• •••• ${last4}`
+    : `•••• •••• •••• ${last4}`;
 
   const revealedDisplay = isLast4
-    ? `••••  ••••  ••••  ${last4}`
+    ? `•••• •••• •••• ${last4}`
     : rawClean.length > 0
-    ? rawClean.replace(/(\d{4})/g, '$1  ').trim()
-    : '••••  ••••  ••••  ••••';
+    ? rawClean.replace(/(\d{4})/g, '$1 ').trim()
+    : '•••• •••• •••• ••••';
 
   const currentDisplayNumber = showNumber ? revealedDisplay : maskedDisplay;
 
@@ -213,6 +213,8 @@ export const CreditCardView: React.FC<CreditCardViewProps> = ({
                 showNumber && styles.cardNumberTextRevealed,
               ]}
               numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.72}
             >
               {currentDisplayNumber}
             </Text>
@@ -498,23 +500,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginVertical: 4,
+    gap: 8,
   },
   cardNumberText: {
-    fontSize: 16.5,
+    fontSize: Platform.OS === 'ios' ? 16 : 14.5,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 1.2,
+    letterSpacing: Platform.OS === 'ios' ? 1.0 : 0.6,
     flex: 1,
-    marginRight: 8,
+    flexShrink: 1,
+    marginRight: 6,
   },
   cardNumberTextRevealed: {
-    letterSpacing: 1.5,
+    letterSpacing: Platform.OS === 'ios' ? 1.2 : 0.8,
   },
   cardActionGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 0,
   },
   cardActionBtn: {
     width: 32,

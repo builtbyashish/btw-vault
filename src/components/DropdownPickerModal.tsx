@@ -9,6 +9,7 @@ import {
   TextInput,
   Platform,
   TouchableWithoutFeedback,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, Check, Search, CheckSquare, Square, ListFilter } from 'lucide-react-native';
@@ -129,8 +130,12 @@ export const DropdownPickerModal: React.FC<DropdownPickerModalProps> = ({
     >
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.overlay}>
-          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <View style={styles.sheet}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardAvoid}
+          >
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+              <View style={styles.sheet}>
               {/* Drag Indicator */}
               <View style={styles.indicatorContainer}>
                 <View style={styles.indicator} />
@@ -315,9 +320,10 @@ export const DropdownPickerModal: React.FC<DropdownPickerModalProps> = ({
               <SafeAreaView edges={['bottom']} />
             </View>
           </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
+  </Modal>
   );
 };
 
@@ -329,6 +335,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  keyboardAvoid: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   sheet: {

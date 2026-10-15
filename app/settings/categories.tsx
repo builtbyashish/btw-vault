@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -36,6 +37,8 @@ import {
   Sparkles,
   CheckSquare,
   ListFilter,
+  Search,
+  Smile,
 } from 'lucide-react-native';
 import { useVault } from '../../src/context/VaultContext';
 import {
@@ -46,10 +49,46 @@ import {
 import {
   CURATED_CATEGORY_COLORS,
   CURATED_CATEGORY_ICONS,
+  CURATED_EMOJI_ICONS,
+  ALL_SEARCHABLE_ICONS,
+  CATEGORY_ICON_GROUPS,
+  CuratedIconItem,
+  IconGroupKey,
   CATEGORY_ICON_MAP,
   CATEGORY_THEMES,
+  isEmojiIcon,
+  cleanEmoji,
+  getCategoryIcon,
 } from '../../src/theme/categoryColors';
 import { HapticService } from '../../src/core/haptics';
+import { useKeyboardAwareScroll } from '../../src/core/useKeyboardAwareScroll';
+
+const QUICK_PICK_ICONS: { id: string; label: string }[] = [
+  { id: 'KeyRound', label: 'Key' },
+  { id: 'ShieldCheck', label: 'Shield' },
+  { id: 'CreditCard', label: 'Card' },
+  { id: 'Wallet', label: 'Wallet' },
+  { id: 'Landmark', label: 'Bank' },
+  { id: 'Smartphone', label: 'Phone' },
+  { id: 'House', label: 'Home' },
+  { id: 'Car', label: 'Car' },
+  { id: 'Plane', label: 'Flight' },
+  { id: 'Heart', label: 'Health' },
+  { id: 'Briefcase', label: 'Work' },
+  { id: 'Gamepad2', label: 'Gaming' },
+  { id: 'Tv', label: 'TV' },
+  { id: 'StickyNote', label: 'Note' },
+  { id: 'Folder', label: 'Folder' },
+  { id: 'emoji:🔑', label: 'Key' },
+  { id: 'emoji:💳', label: 'Card' },
+  { id: 'emoji:🏦', label: 'Bank' },
+  { id: 'emoji:🚀', label: 'Rocket' },
+  { id: 'emoji:🏠', label: 'Home' },
+  { id: 'emoji:🎮', label: 'Gaming' },
+  { id: 'emoji:🏥', label: 'Medical' },
+  { id: 'emoji:🍕', label: 'Food' },
+  { id: 'emoji:💎', label: 'Diamond' },
+];
 
 const FIELD_TYPE_OPTIONS: { type: CustomFieldType; label: string; desc: string; icon: any }[] = [
   { type: 'text', label: 'Single-line Text', desc: 'Standard short text or label', icon: Type },
@@ -90,6 +129,82 @@ export default function CustomCategoriesScreen() {
   // Field type selector sub-modal
   const [activeFieldIdForType, setActiveFieldIdForType] = useState<string | null>(null);
 
+  // Icon & Emoji Picker Modal State
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
+  const [iconSearchQuery, setIconSearchQuery] = useState('');
+  const [selectedIconGroup, setSelectedIconGroup] = useState<IconGroupKey>('all');
+  const [customEmojiText, setCustomEmojiText] = useState('');
+
+  // Human readable label for any icon or emoji
+  const getIconLabel = (iconId: string) => {
+    if (isEmojiIcon(iconId)) {
+      const clean = cleanEmoji(iconId);
+      const found = CURATED_EMOJI_ICONS.find((e) => e.emojiChar === clean || e.id === iconId);
+      return found ? `${clean}  ${found.label}` : `Emoji: ${clean}`;
+    }
+    const found = ALL_SEARCHABLE_ICONS.find((i) => i.id === iconId);
+    return found ? found.label : iconId;
+  };
+
+  // Filtered icons and emojis based on search and group
+  const filteredIcons = useMemo(() => {
+    let list = ALL_SEARCHABLE_ICONS;
+
+    if (selectedIconGroup !== 'all') {
+      if (selectedIconGroup === 'emoji') {
+        list = list.filter((i) => i.isEmoji);
+      } else {
+        list = list.filter((i) => i.group === selectedIconGroup);
+      }
+    }
+
+    const q = iconSearchQuery.trim().toLowerCase();
+    if (!q) return list;
+
+    if (isEmojiIcon(q)) {
+      return list;
+    }
+
+    return list.filter((item) => {
+      if (item.label.toLowerCase().includes(q)) return true;
+      if (item.id.toLowerCase().includes(q)) return true;
+      if (item.tags.some((t) => t.toLowerCase().includes(q))) return true;
+      return false;
+    });
+  }, [selectedIconGroup, iconSearchQuery]);
+
+  // Detected emoji in search bar
+  const typedEmojiInSearch = useMemo(() => {
+    const trimmed = iconSearchQuery.trim();
+    if (isEmojiIcon(trimmed)) {
+      return cleanEmoji(trimmed);
+    }
+    return null;
+  }, [iconSearchQuery]);
+
+  const handleSelectPickerIcon = (item: CuratedIconItem) => {
+    HapticService.selection();
+    setCatIcon(item.id);
+    setIsIconPickerOpen(false);
+  };
+
+  // Keyboard awareness & smart auto-scroll hook
+  const {
+    scrollViewRef: modalScrollRef,
+    keyboardHeight,
+    contentPaddingBottom: modalPaddingBottom,
+    handleScrollLayout: handleModalScrollLayout,
+    handleScroll: handleModalScroll,
+    registerFieldLayout: registerModalFieldLayout,
+    scrollToField: scrollToModalField,
+    handleInputFocus: handleModalInputFocus,
+  } = useKeyboardAwareScroll({
+    topMargin: 20,
+    bottomMargin: 24,
+    defaultPaddingBottom: 48,
+  });
+  const fieldsListTopRef = useRef<number>(0);
+
   // Item counts per category
   const itemCounts = useMemo(() => {
     const map: Record<string, number> = {
@@ -103,6 +218,12 @@ export default function CustomCategoriesScreen() {
     }
     return map;
   }, [items]);
+
+  // Close Builder Modal cleanly
+  const handleCloseEditor = () => {
+    Keyboard.dismiss();
+    setIsEditorOpen(false);
+  };
 
   // Open Create Modal
   const handleOpenCreate = () => {
@@ -160,6 +281,7 @@ export default function CustomCategoriesScreen() {
       placeholder: 'Enter value',
     };
     setFields((prev) => [...prev, newField]);
+    handleModalInputFocus(newField.id);
   };
 
   const handleUpdateFieldLabel = (id: string, label: string) => {
@@ -245,7 +367,7 @@ export default function CustomCategoriesScreen() {
         });
       }
       await HapticService.success();
-      setIsEditorOpen(false);
+      handleCloseEditor();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not save category.');
     }
@@ -274,7 +396,7 @@ export default function CustomCategoriesScreen() {
   };
 
   // Preview Icon component
-  const PreviewIconComponent = CATEGORY_ICON_MAP[catIcon] || Folder;
+  const PreviewIconComponent = getCategoryIcon(catIcon);
 
   return (
     <View style={styles.screen}>
@@ -378,7 +500,7 @@ export default function CustomCategoriesScreen() {
             </View>
           ) : (
             customCategories.map((cat, idx) => {
-              const IconComp = CATEGORY_ICON_MAP[cat.icon] || Folder;
+              const IconComp = getCategoryIcon(cat.icon);
               const isPinned = pinnedCategoryIds.includes(cat.id);
               const count = itemCounts[cat.id] || 0;
 
@@ -502,7 +624,7 @@ export default function CustomCategoriesScreen() {
         visible={isEditorOpen}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setIsEditorOpen(false)}
+        onRequestClose={handleCloseEditor}
       >
         <SafeAreaView style={styles.modalContainer}>
           <KeyboardAvoidingView
@@ -512,7 +634,7 @@ export default function CustomCategoriesScreen() {
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <TouchableOpacity
-                onPress={() => setIsEditorOpen(false)}
+                onPress={handleCloseEditor}
                 style={styles.modalCloseBtn}
               >
                 <X color="#8E8E93" size={20} />
@@ -530,8 +652,15 @@ export default function CustomCategoriesScreen() {
             </View>
 
             <ScrollView
+              ref={modalScrollRef}
               style={styles.modalScroll}
-              contentContainerStyle={styles.modalScrollContent}
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                { paddingBottom: modalPaddingBottom },
+              ]}
+              onLayout={handleModalScrollLayout}
+              onScroll={handleModalScroll}
+              scrollEventThrottle={16}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
@@ -557,7 +686,16 @@ export default function CustomCategoriesScreen() {
 
               {/* Category Name Input */}
               <Text style={styles.modalSectionLabel}>Category Name</Text>
-              <View style={styles.inputContainer}>
+              <View
+                style={styles.inputContainer}
+                onLayout={(e) => {
+                  registerModalFieldLayout(
+                    'catName',
+                    e.nativeEvent.layout.y,
+                    e.nativeEvent.layout.height
+                  );
+                }}
+              >
                 <TextInput
                   style={styles.textInput}
                   placeholder="e.g. MFA Tokens, Server Keys, Crypto"
@@ -565,6 +703,7 @@ export default function CustomCategoriesScreen() {
                   value={catName}
                   onChangeText={setCatName}
                   autoCapitalize="words"
+                  onFocus={() => handleModalInputFocus('catName')}
                 />
               </View>
 
@@ -593,20 +732,87 @@ export default function CustomCategoriesScreen() {
                 })}
               </View>
 
-              {/* Icon Selector */}
-              <Text style={styles.modalSectionLabel}>Category Icon</Text>
-              <View style={styles.iconGrid}>
-                {CURATED_CATEGORY_ICONS.map((item) => {
-                  const IconComp = item.icon;
+              {/* Icon Selector Header & Action */}
+              <View style={styles.iconSectionHeaderRow}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={styles.modalSectionLabel}>Category Icon</Text>
+                  <Text style={styles.modalSectionDesc}>
+                    Choose from 110+ icons, select an emoji, or search.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.searchIconsPill, { borderColor: catColor }]}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    HapticService.selection();
+                    setIconSearchQuery('');
+                    setSelectedIconGroup('all');
+                    setIsIconPickerOpen(true);
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Search color={catColor} size={13} style={{ marginRight: 5 }} />
+                  <Text style={[styles.searchIconsPillText, { color: catColor }]}>
+                    Search All (110+)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Active Icon Display Card */}
+              <TouchableOpacity
+                style={[
+                  styles.activeIconCard,
+                  { borderColor: `${catColor}50`, backgroundColor: '#FFFFFF' },
+                ]}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  HapticService.selection();
+                  setIconSearchQuery('');
+                  setSelectedIconGroup('all');
+                  setIsIconPickerOpen(true);
+                }}
+                activeOpacity={0.75}
+              >
+                <View
+                  style={[
+                    styles.activeIconSquircle,
+                    { backgroundColor: `${catColor}20`, borderColor: catColor },
+                  ]}
+                >
+                  <PreviewIconComponent color={catColor} size={24} />
+                </View>
+                <View style={styles.activeIconMeta}>
+                  <Text style={styles.activeIconTitle}>
+                    {getIconLabel(catIcon)}
+                  </Text>
+                  <Text style={styles.activeIconSubtitle}>
+                    Tap to search & browse full library or enter any emoji
+                  </Text>
+                </View>
+                <ChevronRight color="#8E8E93" size={18} />
+              </TouchableOpacity>
+
+              {/* Quick Pick Horizontal Strip */}
+              <Text style={styles.quickPickLabel}>POPULAR QUICK-PICKS</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickPickScroll}
+              >
+                {QUICK_PICK_ICONS.map((item) => {
                   const isSelected = catIcon === item.id;
+                  const QuickComp = getCategoryIcon(item.id);
+
                   return (
                     <TouchableOpacity
                       key={item.id}
                       style={[
-                        styles.iconOption,
+                        styles.quickPickChip,
                         isSelected && {
-                          backgroundColor: `${catColor}20`,
+                          backgroundColor: `${catColor}22`,
                           borderColor: catColor,
+                          borderWidth: 1.5,
                         },
                       ]}
                       onPress={() => {
@@ -614,15 +820,16 @@ export default function CustomCategoriesScreen() {
                         setCatIcon(item.id);
                       }}
                       activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     >
-                      <IconComp
+                      <QuickComp
                         color={isSelected ? catColor : '#475569'}
-                        size={20}
+                        size={17}
                       />
                       <Text
                         style={[
-                          styles.iconOptionText,
-                          isSelected && { color: catColor, fontWeight: '600' },
+                          styles.quickPickChipText,
+                          isSelected && { color: catColor, fontWeight: '700' },
                         ]}
                         numberOfLines={1}
                       >
@@ -631,7 +838,21 @@ export default function CustomCategoriesScreen() {
                     </TouchableOpacity>
                   );
                 })}
-              </View>
+                <TouchableOpacity
+                  style={[styles.quickPickMoreChip, { borderColor: catColor }]}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    HapticService.selection();
+                    setIconSearchQuery('');
+                    setSelectedIconGroup('all');
+                    setIsIconPickerOpen(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Search color={catColor} size={13} style={{ marginRight: 4 }} />
+                  <Text style={[styles.quickPickMoreText, { color: catColor }]}>More...</Text>
+                </TouchableOpacity>
+              </ScrollView>
 
               {/* Field Schema Playground */}
               <View style={styles.fieldHeaderRow}>
@@ -659,13 +880,28 @@ export default function CustomCategoriesScreen() {
                   </Text>
                 </View>
               ) : (
-                <View style={styles.fieldsList}>
+                <View
+                  style={styles.fieldsList}
+                  onLayout={(e) => {
+                    fieldsListTopRef.current = e.nativeEvent.layout.y;
+                  }}
+                >
                   {fields.map((field, idx) => {
                     const currentType = FIELD_TYPE_OPTIONS.find((t) => t.type === field.type) || FIELD_TYPE_OPTIONS[0];
                     const TypeIcon = currentType.icon;
 
                     return (
-                      <View key={field.id} style={styles.fieldRowCard}>
+                      <View
+                        key={field.id}
+                        style={styles.fieldRowCard}
+                        onLayout={(e) => {
+                          registerModalFieldLayout(
+                            field.id,
+                            (fieldsListTopRef.current || 0) + e.nativeEvent.layout.y,
+                            e.nativeEvent.layout.height
+                          );
+                        }}
+                      >
                         <View style={styles.fieldRowCardHeader}>
                           <View style={styles.fieldNumberBadge}>
                             <Text style={styles.fieldNumberText}>{idx + 1}</Text>
@@ -678,12 +914,14 @@ export default function CustomCategoriesScreen() {
                             onChangeText={(txt) => handleUpdateFieldLabel(field.id, txt)}
                             placeholder="Field label"
                             placeholderTextColor="#8E8E93"
+                            onFocus={() => handleModalInputFocus(field.id)}
                           />
 
                           {/* Type Picker Trigger */}
                           <TouchableOpacity
                             style={styles.fieldTypePickerBtn}
                             onPress={() => {
+                              Keyboard.dismiss();
                               HapticService.selection();
                               setActiveFieldIdForType(field.id);
                             }}
@@ -751,6 +989,7 @@ export default function CustomCategoriesScreen() {
                                 onChangeText={(val) =>
                                   setNewOptionInputs((prev) => ({ ...prev, [field.id]: val }))
                                 }
+                                onFocus={() => handleModalInputFocus(field.id)}
                                 onSubmitEditing={() => handleAddOptionToField(field.id)}
                                 returnKeyType="done"
                               />
@@ -770,8 +1009,6 @@ export default function CustomCategoriesScreen() {
                   })}
                 </View>
               )}
-
-              <View style={{ height: 40 }} />
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
@@ -824,6 +1061,268 @@ export default function CustomCategoriesScreen() {
             </View>
           </TouchableOpacity>
         </Modal>
+      </Modal>
+
+      {/* FULL ICON & EMOJI PICKER MODAL */}
+      <Modal
+        visible={isIconPickerOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsIconPickerOpen(false)}
+      >
+        <SafeAreaView style={styles.iconModalSafeArea}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
+          >
+            {/* Modal Header */}
+            <View style={styles.iconModalHeader}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.iconModalTitle}>Choose Category Icon</Text>
+                <Text style={styles.iconModalSubtitle}>
+                  110+ icons & emojis, or enter any custom emoji
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsIconPickerOpen(false)}
+                style={styles.iconModalCloseBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X color="#8E8E93" size={20} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input Bar */}
+            <View style={styles.iconSearchRow}>
+              <Search size={16} color="#8E8E93" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.iconSearchInput}
+                placeholder="Search icons & emojis (car, bank, 🚀)..."
+                placeholderTextColor="#8E8E93"
+                value={iconSearchQuery}
+                onChangeText={setIconSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+              />
+              {iconSearchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setIconSearchQuery('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X size={15} color="#8E8E93" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Category Filter Tabs */}
+            <View style={styles.iconTabsWrapper}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.iconTabsScroll}
+              >
+                {CATEGORY_ICON_GROUPS.map((grp) => {
+                  const isSelected = selectedIconGroup === grp.key;
+                  return (
+                    <TouchableOpacity
+                      key={grp.key}
+                      style={[
+                        styles.iconTabChip,
+                        isSelected && {
+                          backgroundColor: catColor,
+                          borderColor: catColor,
+                        },
+                      ]}
+                      onPress={() => {
+                        HapticService.selection();
+                        setSelectedIconGroup(grp.key);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.iconTabChipText,
+                          isSelected && { color: '#FFFFFF', fontWeight: '700' },
+                        ]}
+                      >
+                        {grp.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Icons Scroll View */}
+            <ScrollView
+              style={styles.iconGridScroll}
+              contentContainerStyle={styles.iconGridScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {/* If user typed an emoji in the search bar */}
+              {typedEmojiInSearch && (
+                <TouchableOpacity
+                  style={[styles.typedEmojiPrompt, { borderColor: catColor }]}
+                  onPress={() => {
+                    HapticService.success();
+                    setCatIcon(`emoji:${typedEmojiInSearch}`);
+                    setIsIconPickerOpen(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.typedEmojiAvatar,
+                      { backgroundColor: `${catColor}20` },
+                    ]}
+                  >
+                    <Text style={{ fontSize: 28 }}>{typedEmojiInSearch}</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.typedEmojiPromptTitle}>
+                      Use "{typedEmojiInSearch}" as Icon
+                    </Text>
+                    <Text style={styles.typedEmojiPromptDesc}>
+                      Tap to apply this custom emoji directly
+                    </Text>
+                  </View>
+                  <Check color={catColor} size={22} strokeWidth={2.5} />
+                </TouchableOpacity>
+              )}
+
+              {/* Custom Emoji Input Box */}
+              <View style={styles.customEmojiBox}>
+                <View style={styles.customEmojiHeader}>
+                  <Smile size={14} color="#64748B" style={{ marginRight: 6 }} />
+                  <Text style={styles.customEmojiLabel}>CUSTOM EMOJI</Text>
+                </View>
+                <View style={styles.customEmojiInputWrapper}>
+                  <View
+                    style={[
+                      styles.customEmojiPreviewSquare,
+                      {
+                        backgroundColor: isEmojiIcon(customEmojiText.trim())
+                          ? `${catColor}18`
+                          : '#F2F2F7',
+                        borderColor: isEmojiIcon(customEmojiText.trim())
+                          ? catColor
+                          : '#E5E5EA',
+                      },
+                    ]}
+                  >
+                    {isEmojiIcon(customEmojiText.trim()) ? (
+                      <Text style={{ fontSize: 22 }}>
+                        {cleanEmoji(customEmojiText.trim())}
+                      </Text>
+                    ) : (
+                      <Smile size={20} color="#8E8E93" strokeWidth={2} />
+                    )}
+                  </View>
+                  <TextInput
+                    style={styles.customEmojiField}
+                    placeholder="Type or paste any emoji (e.g. 🚀, 🥑)..."
+                    placeholderTextColor="#8E8E93"
+                    value={customEmojiText}
+                    onChangeText={setCustomEmojiText}
+                    maxLength={10}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.customEmojiSetBtn,
+                      {
+                        backgroundColor: isEmojiIcon(customEmojiText.trim())
+                          ? catColor
+                          : '#E5E5EA',
+                      },
+                    ]}
+                    disabled={!isEmojiIcon(customEmojiText.trim())}
+                    onPress={() => {
+                      const clean = cleanEmoji(customEmojiText.trim());
+                      HapticService.success();
+                      setCatIcon(`emoji:${clean}`);
+                      setCustomEmojiText('');
+                      setIsIconPickerOpen(false);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.customEmojiSetBtnText,
+                        {
+                          color: isEmojiIcon(customEmojiText.trim())
+                            ? '#FFFFFF'
+                            : '#8E8E93',
+                        },
+                      ]}
+                    >
+                      Use
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Filtered Icons Results */}
+              {filteredIcons.length === 0 ? (
+                <View style={styles.emptyIconsState}>
+                  <Text style={styles.emptyIconsTitle}>No matching icons found</Text>
+                  <Text style={styles.emptyIconsSubtitle}>
+                    Try searching with another keyword or enter any custom emoji above!
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.pickerGrid}>
+                  {filteredIcons.map((item) => {
+                    const isSelected = catIcon === item.id;
+                    const IconComp = item.icon;
+
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[
+                          styles.pickerCard,
+                          isSelected && {
+                            backgroundColor: `${catColor}18`,
+                            borderColor: catColor,
+                            borderWidth: 2,
+                          },
+                        ]}
+                        onPress={() => handleSelectPickerIcon(item)}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={item.label}
+                      >
+                        <View style={styles.pickerCardIconBox}>
+                          {item.isEmoji ? (
+                            <Text style={{ fontSize: 26, textAlign: 'center' }}>
+                              {item.emojiChar}
+                            </Text>
+                          ) : IconComp ? (
+                            <IconComp
+                              color={isSelected ? catColor : '#334155'}
+                              size={22}
+                              strokeWidth={2.2}
+                            />
+                          ) : null}
+                        </View>
+                        <Text
+                          style={[
+                            styles.pickerCardLabel,
+                            isSelected && { color: catColor, fontWeight: '700' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -1308,9 +1807,10 @@ const styles = StyleSheet.create({
   fieldLabelInput: {
     flex: 1,
     minWidth: 0,
-    fontSize: 14,
+    fontSize: 14.5,
     color: '#000000',
-    paddingVertical: 4,
+    paddingVertical: 8,
+    minHeight: 38,
     marginRight: 8,
   },
   fieldTypePickerBtn: {
@@ -1474,5 +1974,298 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8E8E93',
     marginTop: 2,
+  },
+
+  // Icon Section in Builder
+  iconSectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  searchIconsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  searchIconsPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  activeIconCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  activeIconSquircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activeIconMeta: {
+    flex: 1,
+  },
+  activeIconTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  activeIconSubtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  quickPickLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8E8E93',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  quickPickScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 16,
+  },
+  quickPickChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    gap: 6,
+  },
+  quickPickChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  quickPickMoreChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+  },
+  quickPickMoreText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Icon Picker Modal Styles
+  iconModalSafeArea: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
+  iconModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5EA',
+  },
+  iconModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  iconModalSubtitle: {
+    fontSize: 12.5,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  iconModalCloseBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
+  },
+  iconSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  iconSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#000000',
+    paddingVertical: 0,
+  },
+  iconTabsWrapper: {
+    backgroundColor: '#F2F2F7',
+    paddingBottom: 10,
+  },
+  iconTabsScroll: {
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  iconTabChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  iconTabChipText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  iconGridScroll: {
+    flex: 1,
+  },
+  iconGridScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+  },
+  typedEmojiPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.5,
+    marginBottom: 12,
+  },
+  typedEmojiAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  typedEmojiPromptTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  typedEmojiPromptDesc: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  customEmojiBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    marginBottom: 14,
+  },
+  customEmojiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  customEmojiLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  customEmojiInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customEmojiPreviewSquare: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customEmojiField: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#000000',
+  },
+  customEmojiSetBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  customEmojiSetBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  emptyIconsState: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyIconsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  emptyIconsSubtitle: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginTop: 4,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  pickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pickerCard: {
+    width: '23%',
+    minHeight: 70,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 6,
+  },
+  pickerCardIconBox: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerCardLabel: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

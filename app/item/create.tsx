@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -56,6 +57,8 @@ import {
 } from '../../src/card-validator';
 import { LiveCardPreview } from '../../src/components/LiveCardPreview';
 import { GoogleKeepNoteEditor } from '../../src/components/GoogleKeepNoteEditor';
+import { useKeyboardAwareScroll } from '../../src/core/useKeyboardAwareScroll';
+import { VAULT_LIMITS } from '../../src/core/security/vaultLimits';
 
 interface CategoryMeta {
   name: string;
@@ -267,53 +270,25 @@ export default function CreateItemScreen() {
 
   const cvvMaxLen = cardBrand === 'amex' ? 4 : 3;
 
-  // Keyboard awareness & auto-scrolling
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const fieldOffsets = useRef<Record<string, number>>({});
-  const activeFieldRef = useRef<string | null>(null);
+  // Keyboard awareness & smart auto-scrolling
+  const {
+    scrollViewRef,
+    keyboardHeight,
+    contentPaddingBottom,
+    handleScrollLayout,
+    handleScroll,
+    registerFieldLayout,
+    scrollToField,
+    handleInputFocus,
+  } = useKeyboardAwareScroll({
+    topMargin: 20,
+    bottomMargin: 24,
+    defaultPaddingBottom: 40,
+  });
 
-  const scrollToField = (fieldName: string) => {
-    setTimeout(() => {
-      const y = fieldOffsets.current[fieldName];
-      if (typeof y === 'number' && y > 0) {
-        scrollViewRef.current?.scrollTo({
-          y: Math.max(0, y - 30),
-          animated: true,
-        });
-      } else if (fieldName === 'notes' || fieldName === 'tags' || fieldName === 'customFields') {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }
-    }, 80);
+  const onFieldLayout = (fieldName: string) => (e: any) => {
+    registerFieldLayout(fieldName, e.nativeEvent.layout.y, e.nativeEvent.layout.height);
   };
-
-  const handleInputFocus = (fieldName: string) => {
-    activeFieldRef.current = fieldName;
-    scrollToField(fieldName);
-  };
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      const height = e.endCoordinates.height;
-      setKeyboardHeight(height);
-      if (activeFieldRef.current) {
-        scrollToField(activeFieldRef.current);
-      }
-    });
-
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-      activeFieldRef.current = null;
-    });
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   // Additional URL handlers (Login)
   const handleAddAnotherWebsite = () => {
@@ -581,15 +556,18 @@ export default function CreateItemScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 40 },
+          { paddingBottom: contentPaddingBottom },
         ]}
+        onLayout={handleScrollLayout}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {/* 1. LOGIN UI */}
         {category === 'login' && (
           <View style={styles.card}>
-            <View onLayout={(e) => { fieldOffsets.current['title'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('title')}>
               <Text style={styles.label}>TITLE *</Text>
               <TextInput
                 style={styles.input}
@@ -597,12 +575,13 @@ export default function CreateItemScreen() {
                 placeholderTextColor="#8E8E93"
                 value={title}
                 onChangeText={setTitle}
+                maxLength={VAULT_LIMITS.TITLE_MAX_LEN}
                 onFocus={() => handleInputFocus('title')}
               />
             </View>
             <View style={styles.separator} />
 
-            <View onLayout={(e) => { fieldOffsets.current['username'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('username')}>
               <Text style={styles.label}>USERNAME / EMAIL</Text>
               <TextInput
                 style={styles.input}
@@ -610,13 +589,14 @@ export default function CreateItemScreen() {
                 placeholderTextColor="#8E8E93"
                 value={username}
                 onChangeText={setUsername}
+                maxLength={VAULT_LIMITS.USERNAME_MAX_LEN}
                 autoCapitalize="none"
                 onFocus={() => handleInputFocus('username')}
               />
             </View>
             <View style={styles.separator} />
 
-            <View onLayout={(e) => { fieldOffsets.current['password'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('password')}>
               <View style={styles.rowLabel}>
                 <Text style={styles.label}>PASSWORD</Text>
                 <TouchableOpacity
@@ -635,6 +615,7 @@ export default function CreateItemScreen() {
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
+                  maxLength={VAULT_LIMITS.PASSWORD_MAX_LEN}
                   autoCapitalize="none"
                   onFocus={() => handleInputFocus('password')}
                 />
@@ -653,7 +634,7 @@ export default function CreateItemScreen() {
             </View>
             <View style={styles.separator} />
 
-            <View onLayout={(e) => { fieldOffsets.current['url'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('url')}>
               <Text style={styles.label}>WEBSITE</Text>
               <TextInput
                 style={styles.input}
@@ -661,6 +642,7 @@ export default function CreateItemScreen() {
                 placeholderTextColor="#8E8E93"
                 value={url}
                 onChangeText={setUrl}
+                maxLength={VAULT_LIMITS.URL_MAX_LEN}
                 autoCapitalize="none"
                 keyboardType="url"
                 onFocus={() => handleInputFocus('url')}
@@ -671,7 +653,7 @@ export default function CreateItemScreen() {
             {additionalUrls.map((anotherUrl, idx) => (
               <View
                 key={idx}
-                onLayout={(e) => { fieldOffsets.current[`additionalUrl_${idx}`] = e.nativeEvent.layout.y; }}
+                onLayout={onFieldLayout(`additionalUrl_${idx}`)}
               >
                 <View style={styles.separator} />
                 <View style={styles.rowLabel}>
@@ -691,6 +673,7 @@ export default function CreateItemScreen() {
                   placeholderTextColor="#8E8E93"
                   value={anotherUrl}
                   onChangeText={(txt) => handleUpdateAnotherWebsite(idx, txt)}
+                  maxLength={VAULT_LIMITS.URL_MAX_LEN}
                   autoCapitalize="none"
                   keyboardType="url"
                   onFocus={() => handleInputFocus(`additionalUrl_${idx}`)}
@@ -711,7 +694,7 @@ export default function CreateItemScreen() {
 
             <View style={styles.separator} />
 
-            <View onLayout={(e) => { fieldOffsets.current['notes'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('notes')}>
               <Text style={styles.label}>NOTES</Text>
               <TextInput
                 style={[styles.input, styles.notesInput]}
@@ -719,6 +702,7 @@ export default function CreateItemScreen() {
                 placeholderTextColor="#8E8E93"
                 value={notes}
                 onChangeText={setNotes}
+                maxLength={VAULT_LIMITS.NOTE_MAX_LEN}
                 multiline
                 numberOfLines={3}
                 onFocus={() => handleInputFocus('notes')}
@@ -726,7 +710,7 @@ export default function CreateItemScreen() {
             </View>
 
             <View style={styles.separator} />
-            <View onLayout={(e) => { fieldOffsets.current['tags'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('tags')}>
               <TagEditor
                 tags={tags}
                 onChange={setTags}
@@ -736,7 +720,7 @@ export default function CreateItemScreen() {
             </View>
 
             <View style={styles.separator} />
-            <View onLayout={(e) => { fieldOffsets.current['customFields'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('customFields')}>
               <CustomFieldEditor
                 fields={customFields}
                 onChange={setCustomFields}
@@ -764,7 +748,7 @@ export default function CreateItemScreen() {
 
             <View style={styles.card}>
               {/* TITLE */}
-              <View onLayout={(e) => { fieldOffsets.current['title'] = e.nativeEvent.layout.y; }}>
+              <View onLayout={onFieldLayout('title')}>
                 <Text style={styles.label}>TITLE *</Text>
                 <TextInput
                   style={styles.input}
@@ -772,6 +756,7 @@ export default function CreateItemScreen() {
                   placeholderTextColor="#8E8E93"
                   value={title}
                   onChangeText={setTitle}
+                  maxLength={VAULT_LIMITS.TITLE_MAX_LEN}
                   returnKeyType="next"
                   onSubmitEditing={() => cardholderInputRef.current?.focus()}
                   onFocus={() => handleInputFocus('title')}
@@ -780,7 +765,7 @@ export default function CreateItemScreen() {
               <View style={styles.separator} />
 
               {/* CARDHOLDER NAME */}
-              <View onLayout={(e) => { fieldOffsets.current['cardholderName'] = e.nativeEvent.layout.y; }}>
+              <View onLayout={onFieldLayout('cardholderName')}>
                 <Text style={styles.label}>CARDHOLDER NAME</Text>
                 <TextInput
                   ref={cardholderInputRef}
@@ -789,6 +774,7 @@ export default function CreateItemScreen() {
                   placeholderTextColor="#8E8E93"
                   value={cardholderName}
                   onChangeText={handleCardholderNameChange}
+                  maxLength={VAULT_LIMITS.CARDHOLDER_MAX_LEN}
                   autoCapitalize="characters"
                   returnKeyType="next"
                   onSubmitEditing={() => cardNumberInputRef.current?.focus()}
@@ -798,7 +784,7 @@ export default function CreateItemScreen() {
               <View style={styles.separator} />
 
               {/* CARD NUMBER */}
-              <View onLayout={(e) => { fieldOffsets.current['cardNumber'] = e.nativeEvent.layout.y; }}>
+              <View onLayout={onFieldLayout('cardNumber')}>
                 <View style={styles.rowLabel}>
                   <View style={styles.labelWithInfo}>
                     <Text style={styles.label}>CARD NUMBER</Text>
@@ -951,7 +937,7 @@ export default function CreateItemScreen() {
               {/* EXPIRY & CVV ROW */}
               <View
                 style={styles.twoColumnRow}
-                onLayout={(e) => { fieldOffsets.current['expiryDate'] = e.nativeEvent.layout.y; }}
+                onLayout={onFieldLayout('expiryDate')}
               >
                 <View style={styles.halfCol}>
                   <Text style={styles.label}>EXPIRY (MM/YY)</Text>
@@ -1002,7 +988,7 @@ export default function CreateItemScreen() {
               <View style={styles.separator} />
 
               {/* ATM PIN (OPTIONAL) */}
-              <View onLayout={(e) => { fieldOffsets.current['pin'] = e.nativeEvent.layout.y; }}>
+              <View onLayout={onFieldLayout('pin')}>
                 <Text style={styles.label}>ATM PIN (OPTIONAL)</Text>
                 <View style={styles.secureInputRow}>
                   <TextInput
@@ -1029,7 +1015,7 @@ export default function CreateItemScreen() {
               <View style={styles.separator} />
 
               {/* CARD TYPE SELECTOR */}
-              <View onLayout={(e) => { fieldOffsets.current['cardBrand'] = e.nativeEvent.layout.y; }}>
+              <View onLayout={onFieldLayout('cardBrand')}>
                 <Text style={styles.label}>CARD TYPE</Text>
                 <View style={styles.cardTypeGrid}>
                   {CARD_TYPE_OPTIONS.map((item) => {
@@ -1069,7 +1055,7 @@ export default function CreateItemScreen() {
               </View>
               <View style={styles.separator} />
 
-            <View onLayout={(e) => { fieldOffsets.current['notes'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('notes')}>
               <Text style={styles.label}>NOTES</Text>
               <TextInput
                 style={[styles.input, styles.notesInput]}
@@ -1077,6 +1063,7 @@ export default function CreateItemScreen() {
                 placeholderTextColor="#8E8E93"
                 value={notes}
                 onChangeText={setNotes}
+                maxLength={VAULT_LIMITS.NOTE_MAX_LEN}
                 multiline
                 numberOfLines={3}
                 onFocus={() => handleInputFocus('notes')}
@@ -1084,7 +1071,7 @@ export default function CreateItemScreen() {
             </View>
 
             <View style={styles.separator} />
-            <View onLayout={(e) => { fieldOffsets.current['tags'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('tags')}>
               <TagEditor
                 tags={tags}
                 onChange={setTags}
@@ -1094,7 +1081,7 @@ export default function CreateItemScreen() {
             </View>
 
             <View style={styles.separator} />
-            <View onLayout={(e) => { fieldOffsets.current['customFields'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('customFields')}>
               <CustomFieldEditor
                 fields={customFields}
                 onChange={setCustomFields}
@@ -1111,7 +1098,7 @@ export default function CreateItemScreen() {
         <View style={styles.card}>
           {/* If the category has NO fields configured, provide Title input */}
           {customFields.length === 0 && (
-            <View onLayout={(e) => { fieldOffsets.current['title'] = e.nativeEvent.layout.y; }}>
+            <View onLayout={onFieldLayout('title')}>
               <Text style={styles.label}>TITLE *</Text>
               <TextInput
                 style={styles.input}
@@ -1119,6 +1106,7 @@ export default function CreateItemScreen() {
                 placeholderTextColor="#8E8E93"
                 value={title}
                 onChangeText={setTitle}
+                maxLength={VAULT_LIMITS.TITLE_MAX_LEN}
                 onFocus={() => handleInputFocus('title')}
               />
             </View>
@@ -1133,7 +1121,7 @@ export default function CreateItemScreen() {
               <React.Fragment key={field.id}>
                 {(idx > 0 || customFields.length === 0) && <View style={styles.separator} />}
 
-                <View onLayout={(e) => { fieldOffsets.current[`field_${field.id}`] = e.nativeEvent.layout.y; }}>
+                <View onLayout={onFieldLayout(`field_${field.id}`)}>
                   <View style={styles.rowLabel}>
                     <Text style={styles.label}>{(field.label || 'FIELD').toUpperCase()}</Text>
                     <View style={styles.labelActionsRow}>
@@ -1526,68 +1514,73 @@ export default function CreateItemScreen() {
           activeOpacity={1}
           onPress={() => setShowAddFieldModal(false)}
         >
-          <View style={styles.addFieldModalSheet} onStartShouldSetResponder={() => true}>
-            <View style={styles.addFieldModalHeader}>
-              <Text style={styles.addFieldModalTitle}>Add Field</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%', justifyContent: 'flex-end' }}
+          >
+            <View style={styles.addFieldModalSheet} onStartShouldSetResponder={() => true}>
+              <View style={styles.addFieldModalHeader}>
+                <Text style={styles.addFieldModalTitle}>Add Field</Text>
+                <TouchableOpacity
+                  onPress={() => setShowAddFieldModal(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X color="#8E8E93" size={18} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.addFieldModalLabel}>FIELD LABEL</Text>
+              <TextInput
+                style={styles.addFieldModalInput}
+                placeholder="e.g. Account Number, PIN, Recovery Email"
+                placeholderTextColor="#8E8E93"
+                value={newFieldLabel}
+                onChangeText={setNewFieldLabel}
+                autoFocus
+              />
+
+              <Text style={styles.addFieldModalLabel}>FIELD TYPE</Text>
+              <View style={styles.fieldTypeChipsGrid}>
+                {PREDEFINED_TYPES.map((t) => {
+                  const isSelected = newFieldType === t.type;
+                  const IconComp = t.icon;
+                  return (
+                    <TouchableOpacity
+                      key={t.type}
+                      style={[
+                        styles.fieldTypeChip,
+                        isSelected && { backgroundColor: `${t.color}20`, borderColor: t.color },
+                      ]}
+                      onPress={() => {
+                        HapticService.selection();
+                        setNewFieldType(t.type);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <IconComp color={isSelected ? t.color : '#8E8E93'} size={14} style={{ marginRight: 6 }} />
+                      <Text
+                        style={[
+                          styles.fieldTypeChipText,
+                          isSelected && { color: t.color, fontWeight: '700' },
+                        ]}
+                      >
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
               <TouchableOpacity
-                onPress={() => setShowAddFieldModal(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={[styles.addFieldConfirmBtn, { backgroundColor: activeCategoryTheme.color }]}
+                onPress={handleAddNewCustomField}
+                activeOpacity={0.8}
               >
-                <X color="#8E8E93" size={18} />
+                <Plus color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
+                <Text style={styles.addFieldConfirmBtnText}>Add Field to Form</Text>
               </TouchableOpacity>
             </View>
-
-            <Text style={styles.addFieldModalLabel}>FIELD LABEL</Text>
-            <TextInput
-              style={styles.addFieldModalInput}
-              placeholder="e.g. Account Number, PIN, Recovery Email"
-              placeholderTextColor="#8E8E93"
-              value={newFieldLabel}
-              onChangeText={setNewFieldLabel}
-              autoFocus
-            />
-
-            <Text style={styles.addFieldModalLabel}>FIELD TYPE</Text>
-            <View style={styles.fieldTypeChipsGrid}>
-              {PREDEFINED_TYPES.map((t) => {
-                const isSelected = newFieldType === t.type;
-                const IconComp = t.icon;
-                return (
-                  <TouchableOpacity
-                    key={t.type}
-                    style={[
-                      styles.fieldTypeChip,
-                      isSelected && { backgroundColor: `${t.color}20`, borderColor: t.color },
-                    ]}
-                    onPress={() => {
-                      HapticService.selection();
-                      setNewFieldType(t.type);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <IconComp color={isSelected ? t.color : '#8E8E93'} size={14} style={{ marginRight: 6 }} />
-                    <Text
-                      style={[
-                        styles.fieldTypeChipText,
-                        isSelected && { color: t.color, fontWeight: '700' },
-                      ]}
-                    >
-                      {t.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.addFieldConfirmBtn, { backgroundColor: activeCategoryTheme.color }]}
-              onPress={handleAddNewCustomField}
-              activeOpacity={0.8}
-            >
-              <Plus color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
-              <Text style={styles.addFieldConfirmBtnText}>Add Field to Form</Text>
-            </TouchableOpacity>
-          </View>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
     </View>

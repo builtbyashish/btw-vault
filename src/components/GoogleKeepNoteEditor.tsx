@@ -27,6 +27,7 @@ import {
 } from 'lucide-react-native';
 import { HapticService } from '../core/haptics';
 import { AppHeaderBackButton } from './AppHeaderBackButton';
+import { VAULT_LIMITS } from '../core/security/vaultLimits';
 
 export interface KeepNoteData {
   title: string;
@@ -408,7 +409,7 @@ export const GoogleKeepNoteEditor: React.FC<GoogleKeepNoteEditorProps> = ({
           style={styles.canvasScrollView}
           contentContainerStyle={[
             styles.canvasContent,
-            { paddingBottom: 60 },
+            { paddingBottom: keyboardHeight > 0 ? 140 : 80 },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -421,6 +422,7 @@ export const GoogleKeepNoteEditor: React.FC<GoogleKeepNoteEditorProps> = ({
           placeholderTextColor="#9CA3AF"
           value={title}
           onChangeText={setTitle}
+          maxLength={VAULT_LIMITS.TITLE_MAX_LEN}
           returnKeyType="next"
           onSubmitEditing={() => {
             if (!isChecklistMode) {
@@ -459,6 +461,7 @@ export const GoogleKeepNoteEditor: React.FC<GoogleKeepNoteEditorProps> = ({
                   placeholderTextColor="#9CA3AF"
                   value={newTagText}
                   onChangeText={setNewTagText}
+                  maxLength={VAULT_LIMITS.TAG_MAX_LEN}
                   autoFocus
                   returnKeyType="done"
                   onSubmitEditing={handleAddTag}
@@ -495,10 +498,18 @@ export const GoogleKeepNoteEditor: React.FC<GoogleKeepNoteEditorProps> = ({
               placeholderTextColor="#9CA3AF"
               value={notes}
               onChangeText={setNotes}
+              maxLength={VAULT_LIMITS.NOTE_MAX_LEN}
               multiline
               scrollEnabled={false}
               textAlignVertical="top"
             />
+            {notes.length >= 40000 && (
+              <View style={styles.charCountBadge}>
+                <Text style={styles.charCountText}>
+                  {notes.length.toLocaleString()} / {VAULT_LIMITS.NOTE_MAX_LEN.toLocaleString()} characters
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         ) : (
           <View style={styles.checklistContainer}>
@@ -516,6 +527,7 @@ export const GoogleKeepNoteEditor: React.FC<GoogleKeepNoteEditorProps> = ({
                   style={styles.checkItemInput}
                   value={item.text}
                   onChangeText={(txt) => handleUpdateCheckText(item.id, txt)}
+                  maxLength={VAULT_LIMITS.CHECKLIST_ITEM_MAX_LEN}
                   placeholder="List item"
                   placeholderTextColor="#9CA3AF"
                   returnKeyType="next"
@@ -892,6 +904,19 @@ const styles = StyleSheet.create({
   bottomTimestampText: {
     fontSize: 12,
     color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  charCountBadge: {
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  charCountText: {
+    fontSize: 11,
+    color: '#6B7280',
     fontWeight: '500',
   },
 });

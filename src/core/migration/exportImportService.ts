@@ -13,6 +13,7 @@ import {
   bytesToString,
 } from '../crypto/cryptoService';
 import { AppSecurityService } from '../security/appSecurityService';
+import { VAULT_LIMITS } from '../security/vaultLimits';
 
 export interface ExportBackupData {
   version: 1;
@@ -209,7 +210,12 @@ export class ExportImportService {
         throw new Error('Import canceled');
       }
 
-      const fileUri = result.assets[0].uri;
+      const asset = result.assets[0];
+      if (asset.size && asset.size > VAULT_LIMITS.MAX_BACKUP_FILE_BYTES) {
+        throw new Error('The selected backup file is too large (> 25 MB) to be a valid btw vault backup.');
+      }
+
+      const fileUri = asset.uri;
       let rawContent = '';
 
       try {
@@ -240,6 +246,9 @@ export class ExportImportService {
     const content = rawContent.trim();
     if (!content) {
       throw new Error('The selected backup file is empty.');
+    }
+    if (content.length > VAULT_LIMITS.MAX_BACKUP_FILE_BYTES) {
+      throw new Error('The selected backup file exceeds maximum safe size (25 MB).');
     }
 
     let parsed: any;

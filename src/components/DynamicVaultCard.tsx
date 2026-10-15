@@ -157,9 +157,11 @@ export const DynamicVaultCard: React.FC<DynamicVaultCardProps> = ({
       const last4 = rawNumber.slice(-4) || '••••';
       const first4 = rawNumber.length >= 8 ? rawNumber.slice(0, 4) : '4209';
       const cardholder = card.cardholderName || 'CARDHOLDER';
-      const maskedFormatted = rawNumber.length >= 8
-        ? `${first4}  ••••  ••••  ${last4}`
-        : `••••  ••••  ••••  ${last4}`;
+      const maskedFormatted = fullWidth
+        ? (rawNumber.length >= 8
+            ? `${first4} •••• •••• ${last4}`
+            : `•••• •••• •••• ${last4}`)
+        : `•••• •••• ${last4}`;
 
       return (
         <View
@@ -243,6 +245,8 @@ export const DynamicVaultCard: React.FC<DynamicVaultCardProps> = ({
                     fullWidth && styles.cardNumberMaskedFull,
                   ]}
                   numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.72}
                 >
                   {maskedFormatted}
                 </Text>
@@ -843,22 +847,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
+    gap: 8,
   },
   cardBottomLeftCol: {
     flex: 1,
-    marginRight: 10,
+    flexShrink: 1,
+    marginRight: 6,
   },
   cardNumberMasked: {
-    fontSize: 11,
+    fontSize: Platform.OS === 'ios' ? 11 : 10.5,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.6,
+    letterSpacing: Platform.OS === 'ios' ? 0.6 : 0.3,
     marginBottom: 2,
   },
   cardNumberMaskedFull: {
-    fontSize: 15.5,
-    letterSpacing: 1.5,
+    fontSize: Platform.OS === 'ios' ? 15.5 : 14.5,
+    letterSpacing: Platform.OS === 'ios' ? 1.2 : 0.8,
     marginBottom: 4,
   },
   cardholderName: {
@@ -882,12 +888,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255, 255, 255, 0.15)',
+    flexShrink: 0,
   },
   cardMoreBtnSquircleFull: {
     width: 38,
     height: 38,
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    flexShrink: 0,
   },
 
   // --- 2. Dynamic Note Card Styles (FAB Colors: #2A9D8F Emerald & #7C4DFF Purple) ---

@@ -9,6 +9,7 @@ import { BiometricPromptService } from '../core/security/biometricPromptService'
 import { AppSecurityService } from '../core/security/appSecurityService';
 import { ExportImportService } from '../core/migration/exportImportService';
 import { GoogleDriveBackupService } from '../core/cloud/googleDriveBackupService';
+import { sanitizeVaultItem } from '../core/security/vaultLimits';
 
 interface VaultContextType {
   status: VaultStatus;
@@ -329,13 +330,14 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
   const persistVaultItems = async (updatedItems: VaultItem[]): Promise<boolean> => {
     if (!masterKeyRef.current || !saltRef.current) return false;
     try {
+      const sanitizedItems = updatedItems.map(sanitizeVaultItem);
       const encryptedPayload = CryptoService.encryptVaultItems(
-        updatedItems,
+        sanitizedItems,
         masterKeyRef.current,
         saltRef.current
       );
       await VaultStorage.saveEncryptedVault(encryptedPayload);
-      setItems(updatedItems);
+      setItems(sanitizedItems);
 
       // WhatsApp-style silent background cloud sync if enabled
       GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>

@@ -35,29 +35,29 @@ export const LiveCardPreview: React.FC<LiveCardPreviewProps> = ({
 
   if (isLast4) {
     const p4 = rawClean ? rawClean.padEnd(4, '•') : '••••';
-    displayCardNumber = `••••  ••••  ••••  ${p4}`;
+    displayCardNumber = `•••• •••• •••• ${p4}`;
   } else if (rawClean.length > 0) {
     if (network === 'amex') {
       // 4-6-5 format
       const p1 = rawClean.slice(0, 4).padEnd(4, '•');
       const p2 = rawClean.length > 4 ? rawClean.slice(4, 10).padEnd(6, '•') : '••••••';
       const p3 = rawClean.length > 10 ? rawClean.slice(10, 15).padEnd(5, '•') : '•••••';
-      displayCardNumber = `${p1}  ${p2}  ${p3}`;
+      displayCardNumber = `${p1} ${p2} ${p3}`;
     } else if (network === 'diners-club' && rawClean.length <= 14) {
       // 4-6-4 format
       const p1 = rawClean.slice(0, 4).padEnd(4, '•');
       const p2 = rawClean.length > 4 ? rawClean.slice(4, 10).padEnd(6, '•') : '••••••';
       const p3 = rawClean.length > 10 ? rawClean.slice(10, 14).padEnd(4, '•') : '••••';
-      displayCardNumber = `${p1}  ${p2}  ${p3}`;
+      displayCardNumber = `${p1} ${p2} ${p3}`;
     } else {
       // Standard 4-4-4-4
       const p1 = rawClean.slice(0, 4).padEnd(4, '•');
       const p2 = rawClean.length > 4 ? rawClean.slice(4, 8).padEnd(4, '•') : '••••';
       const p3 = rawClean.length > 8 ? rawClean.slice(8, 12).padEnd(4, '•') : '••••';
       const p4 = rawClean.length > 12 ? rawClean.slice(12, 16).padEnd(4, '•') : '••••';
-      displayCardNumber = `${p1}  ${p2}  ${p3}  ${p4}`;
+      displayCardNumber = `${p1} ${p2} ${p3} ${p4}`;
       if (rawClean.length > 16) {
-        displayCardNumber += `  ${rawClean.slice(16, 19)}`;
+        displayCardNumber += ` ${rawClean.slice(16, 19)}`;
       }
     }
   }
@@ -101,7 +101,12 @@ export const LiveCardPreview: React.FC<LiveCardPreviewProps> = ({
 
         {/* Middle: Live Card Number */}
         <View style={styles.numberRow}>
-          <Text style={styles.numberText} numberOfLines={1}>
+          <Text
+            style={styles.numberText}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.72}
+          >
             {displayCardNumber}
           </Text>
         </View>
@@ -210,11 +215,11 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   numberText: {
-    fontSize: 17,
+    fontSize: Platform.OS === 'ios' ? 17 : 15,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 1.2,
+    letterSpacing: Platform.OS === 'ios' ? 1.0 : 0.6,
   },
   bottomRow: {
     flexDirection: 'row',
