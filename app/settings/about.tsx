@@ -67,7 +67,7 @@ export default function AboutScreen() {
         </Text>
         <View style={styles.versionBadge}>
           <ShieldCheck color="#10B981" size={13} style={{ marginRight: 5 }} />
-          <Text style={styles.versionBadgeText}>v1.2.0 • Offline-First • AES-256-GCM</Text>
+          <Text style={styles.versionBadgeText}>v1.3.0 • Offline-First • SQLCipher AES-256</Text>
         </View>
       </View>
 
@@ -80,9 +80,9 @@ export default function AboutScreen() {
             <Cpu size={18} color="#3B82F6" />
           </View>
           <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>1. PBKDF2-HMAC-SHA512 Key Derivation</Text>
+            <Text style={styles.stepTitle}>1. Argon2id Memory-Hard Key Derivation</Text>
             <Text style={styles.stepDesc}>
-              Your master password is never stored or transmitted anywhere. It is stretched using 100,000 iterations of SHA-512 with a cryptographically unique 256-bit salt to derive your AES master key, neutralizing brute-force dictionary attacks.
+              Your master password is never stored or transmitted anywhere. It is stretched using memory-hard Argon2id (4MB RAM, 2 iterations) with a cryptographically unique 256-bit salt to derive your 32-byte raw AES master key, neutralizing both GPU and ASIC dictionary attacks.
             </Text>
           </View>
         </View>
@@ -95,9 +95,9 @@ export default function AboutScreen() {
             <Lock size={18} color="#10B981" />
           </View>
           <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>2. AES-256-GCM Military Encryption</Text>
+            <Text style={styles.stepTitle}>2. SQLCipher Relational C++ JSI Engine</Text>
             <Text style={styles.stepDesc}>
-              Every single credential, card number, private key, note, and custom field is individually sealed with Galois/Counter Mode (GCM). This guarantees both absolute confidentiality and authenticated tamper-proof integrity.
+              Every item, card, note, and custom category is stored in an encrypted SQLite database via native C++ JSI using SQLCipher (AES-256). Every page is individually encrypted on disk, delivering instant sub-millisecond point lookups and composite-indexed queries.
             </Text>
           </View>
         </View>
@@ -110,9 +110,9 @@ export default function AboutScreen() {
             <ShieldCheck size={18} color="#8B5CF6" />
           </View>
           <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>3. Local-First Zero-Knowledge Sandbox</Text>
+            <Text style={styles.stepTitle}>3. Budget Phone Tuning & Zero-Locking WAL</Text>
             <Text style={styles.stepDesc}>
-              Your encrypted database lives inside your device's isolated app sandbox. There is no central server, no telemetry, and no account required. Even if raw files are extracted, they remain unreadable ciphertext.
+              Write-Ahead Logging (WAL) ensures writes never block reads or cause UI frame drops. A strict 2MB RAM page cache ceiling prevents Out-Of-Memory kills on budget Android phones, while PRAGMA synchronous=NORMAL minimizes eMMC flash memory wear.
             </Text>
           </View>
         </View>
@@ -125,9 +125,9 @@ export default function AboutScreen() {
             <EyeOff size={18} color="#F59E0B" />
           </View>
           <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>4. Hardware KeyStore & Ephemeral Memory</Text>
+            <Text style={styles.stepTitle}>4. Zero-Locking Snapshots & Hardware KeyStore</Text>
             <Text style={styles.stepDesc}>
-              Hardware biometrics (Android BiometricPrompt & Fingerprint) protect quick unlocking. The app automatically clears copied secrets from your clipboard after 30 seconds and blinds OS app switchers with a privacy curtain.
+              Cloud sync and backups use atomic VACUUM INTO snapshots with zero table locking. Hardware biometrics (Android BiometricPrompt) protect quick unlocking, secrets automatically wipe from memory, and clipboard auto-clears after 30 seconds.
             </Text>
           </View>
         </View>
@@ -308,7 +308,7 @@ export default function AboutScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.actionTitle}>Inspect Local Encrypted Database</Text>
-            <Text style={styles.actionSubtitle}>View raw AES ciphertext, salts & payload metadata</Text>
+            <Text style={styles.actionSubtitle}>View live SQLCipher DB, WAL buffer, and cryptographic metadata</Text>
           </View>
           <ChevronRight size={18} color="#C7C7CC" />
         </TouchableOpacity>
