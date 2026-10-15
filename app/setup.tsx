@@ -151,7 +151,11 @@ export default function SetupScreen() {
                   {
                     text: 'Restore Vault',
                     onPress: async () => {
-                      const success = await importVaultBackup(data.config, data.payload);
+                      const success = await importVaultBackup(
+                        data.config,
+                        data.payload,
+                        data.dbSnapshotBase64
+                      );
                       if (success) {
                         await HapticService.success();
                         Alert.alert(
@@ -229,7 +233,11 @@ export default function SetupScreen() {
               try {
                 const armored = await GoogleDriveBackupService.downloadBackup();
                 const data = ExportImportService.parseBackupContent(armored);
-                const success = await importVaultBackup(data.config, data.payload);
+                const success = await importVaultBackup(
+                  data.config,
+                  data.payload,
+                  data.dbSnapshotBase64
+                );
                 if (success) {
                   await HapticService.success();
                   Alert.alert(

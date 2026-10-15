@@ -2,7 +2,6 @@ import { argon2id } from '@noble/hashes/argon2';
 import { pbkdf2 } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha256';
 import { gcm } from '@noble/ciphers/aes';
-import * as Crypto from 'expo-crypto';
 import { EncryptedPayload, VaultItem } from '../../types';
 
 const VERIFICATION_TOKEN = 'OFFLINE_VAULT_VERIFY_TOKEN_V1';
@@ -35,12 +34,28 @@ export function bytesToString(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
 
+export function getRandomBytes(length: number): Uint8Array {
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(length);
+    globalThis.crypto.getRandomValues(bytes);
+    return bytes;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('expo-crypto').getRandomBytes(length);
+  } catch {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const nodeCrypto = require('node:crypto');
+    return new Uint8Array(nodeCrypto.randomBytes(length));
+  }
+}
+
 export class CryptoService {
   /**
    * Generates cryptographically secure random bytes
    */
   static getRandomBytes(length: number): Uint8Array {
-    return Crypto.getRandomBytes(length);
+    return getRandomBytes(length);
   }
 
   /**
@@ -70,7 +85,7 @@ export class CryptoService {
    * Encrypts plaintext string using AES-256-GCM with a derived master key
    */
   static encrypt(plaintext: string, masterKey: Uint8Array, salt: Uint8Array): EncryptedPayload {
-    const iv = Crypto.getRandomBytes(12); // 96-bit IV for AES-GCM
+    const iv = getRandomBytes(12); // 96-bit IV for AES-GCM
     const cipher = gcm(masterKey, iv);
     
     const plaintextBytes = stringToBytes(plaintext);

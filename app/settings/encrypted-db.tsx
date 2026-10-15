@@ -39,6 +39,8 @@ export default function EncryptedDatabaseScreen() {
   const [payload, setPayload] = useState<EncryptedPayload | null>(null);
   const [config, setConfig] = useState<VaultConfig | null>(null);
   const [vaultFileSize, setVaultFileSize] = useState<number>(0);
+  const [sqlCipherFileSize, setSqlCipherFileSize] = useState<number>(0);
+  const [walFileSize, setWalFileSize] = useState<number>(0);
   const [configFileSize, setConfigFileSize] = useState<number>(0);
 
   useEffect(() => {
@@ -53,8 +55,20 @@ export default function EncryptedDatabaseScreen() {
       setPayload(p);
       setConfig(c);
 
+      const dbPath = `${Paths.document.uri}/vault.db`;
+      const walPath = `${Paths.document.uri}/vault.db-wal`;
       const vaultPath = `${Paths.document.uri}/vault.enc`;
       const configPath = `${Paths.document.uri}/vault_config.json`;
+
+      const dbInfo = await FileSystem.getInfoAsync(dbPath);
+      if (dbInfo.exists && 'size' in dbInfo) {
+        setSqlCipherFileSize(dbInfo.size || 0);
+      }
+
+      const walInfo = await FileSystem.getInfoAsync(walPath);
+      if (walInfo.exists && 'size' in walInfo) {
+        setWalFileSize(walInfo.size || 0);
+      }
 
       const vInfo = await FileSystem.getInfoAsync(vaultPath);
       if (vInfo.exists && 'size' in vInfo) {
@@ -102,7 +116,7 @@ export default function EncryptedDatabaseScreen() {
             <Lock color="#007AFF" size={16} />
             <Text style={styles.metricLabel}>Encryption Standard</Text>
           </View>
-          <Text style={styles.metricValue}>AES-256-GCM</Text>
+          <Text style={styles.metricValue}>AES-256 (SQLCipher JSI)</Text>
         </View>
         <View style={styles.separator} />
 
@@ -111,18 +125,46 @@ export default function EncryptedDatabaseScreen() {
             <Database color="#34C759" size={16} />
             <Text style={styles.metricLabel}>Key Derivation (KDF)</Text>
           </View>
-          <Text style={styles.metricValue}>PBKDF2-HMAC-SHA256</Text>
+          <Text style={styles.metricValue}>Argon2id (32-byte key)</Text>
         </View>
         <View style={styles.separator} />
 
         <View style={styles.metricRow}>
           <View style={styles.metricLeft}>
             <HardDrive color="#FF9500" size={16} />
-            <Text style={styles.metricLabel}>vault.enc Size</Text>
+            <Text style={styles.metricLabel}>vault.db (SQLCipher)</Text>
           </View>
-          <Text style={styles.metricValue}>{vaultFileSize > 0 ? `${vaultFileSize.toLocaleString()} bytes` : '0 bytes'}</Text>
+          <Text style={styles.metricValue}>
+            {sqlCipherFileSize > 0 ? `${sqlCipherFileSize.toLocaleString()} bytes` : 'Active in WAL'}
+          </Text>
         </View>
         <View style={styles.separator} />
+
+        {walFileSize > 0 && (
+          <>
+            <View style={styles.metricRow}>
+              <View style={styles.metricLeft}>
+                <RefreshCw color="#FF2D55" size={16} />
+                <Text style={styles.metricLabel}>vault.db-wal (WAL Buffer)</Text>
+              </View>
+              <Text style={styles.metricValue}>{`${walFileSize.toLocaleString()} bytes`}</Text>
+            </View>
+            <View style={styles.separator} />
+          </>
+        )}
+
+        {vaultFileSize > 0 && (
+          <>
+            <View style={styles.metricRow}>
+              <View style={styles.metricLeft}>
+                <HardDrive color="#8E8E93" size={16} />
+                <Text style={styles.metricLabel}>vault.enc (Legacy Backup)</Text>
+              </View>
+              <Text style={styles.metricValue}>{`${vaultFileSize.toLocaleString()} bytes`}</Text>
+            </View>
+            <View style={styles.separator} />
+          </>
+        )}
 
         <View style={styles.metricRow}>
           <View style={styles.metricLeft}>

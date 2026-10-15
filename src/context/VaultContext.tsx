@@ -3,6 +3,10 @@ import { AppState, AppStateStatus } from 'react-native';
 import { VaultItem, VaultStatus, VaultConfig, EncryptedPayload, CustomCategoryDefinition } from '../types';
 import { CryptoService, base64ToBytes, bytesToBase64 } from '../core/crypto/cryptoService';
 import { VaultStorage } from '../core/storage/vaultStorage';
+import { SqlCipherService } from '../core/storage/sqlCipherService';
+import { ItemDao } from '../core/storage/itemDao';
+import { CategoryDao } from '../core/storage/categoryDao';
+import { VaultMigrationEngine } from '../core/migration/vaultMigrationEngine';
 import { SecureStorageService } from '../core/storage/secureStorageService';
 import { BiometricService } from '../core/security/biometricService';
 import { BiometricPromptService } from '../core/security/biometricPromptService';
@@ -44,26 +48,13 @@ interface VaultContextType {
   toggleBiometric: (enable: boolean) => Promise<boolean>;
   setAutoLockMinutes: (minutes: number) => Promise<boolean>;
   wipeVault: () => Promise<void>;
-  importVaultBackup: (config: VaultConfig, payload: EncryptedPayload) => Promise<boolean>;
+  importVaultBackup: (config: VaultConfig, payload?: EncryptedPayload, dbSnapshotBase64?: string) => Promise<boolean>;
   customCategories: CustomCategoryDefinition[];
   pinnedCategoryIds: string[];
   addCustomCategory: (cat: Omit<CustomCategoryDefinition, 'id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
   updateCustomCategory: (cat: CustomCategoryDefinition) => Promise<boolean>;
   deleteCustomCategory: (id: string) => Promise<boolean>;
   setPinnedCategoryIds: (ids: string[]) => Promise<boolean>;
-}
-
-function sanitizeVaultItems(rawItems: VaultItem[]): VaultItem[] {
-  return rawItems.map((item) => {
-    if ((item.category as string) === 'document' || (item.category as string) === 'identity') {
-      return {
-        ...item,
-        category: 'note' as const,
-        notes: item.notes || (item.document?.name ? `Imported: ${item.document.name}` : undefined),
-      };
-    }
-    return item;
-  });
 }
 
 const VaultContext = createContext<VaultContextType | undefined>(undefined);
@@ -114,7 +105,6 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         if (!AppSecurityService.isSystemActivityActive()) {
           lastActiveRef.current = Date.now();
-          // Security App Standard: lock vault immediately on minimize / background
           if (nextAppState === 'background' && (autoLockMinutes === 0 || autoLockMinutes === undefined)) {
             if (status === 'unlocked') {
               lockVault();
@@ -189,10 +179,11 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         updatedAt: new Date().toISOString(),
       };
 
-      // Save initial empty vault items
-      const initialPayload = CryptoService.encryptVaultItems([], masterKey, salt);
-      await VaultStorage.saveEncryptedVault(initialPayload);
+      // Save initial config
       await VaultStorage.saveVaultConfig(newConfig);
+
+      // Open and initialize fresh SQLCipher database
+      await SqlCipherService.openVault(masterKey);
 
       if (enableBiometric) {
         await SecureStorageService.storeMasterKeyForBiometric(masterKey);
@@ -241,12 +232,19 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         await SecureStorageService.storeMasterKeyForBiometric(masterKey);
       }
 
-      const encryptedVault = await VaultStorage.loadEncryptedVault();
-      if (encryptedVault) {
-        const decryptedItems = CryptoService.decryptVaultItems(encryptedVault, masterKey);
-        setItems(sanitizeVaultItems(decryptedItems));
-      } else {
-        setItems([]);
+      // Open SQLCipher database with derived key
+      await SqlCipherService.openVault(masterKey);
+
+      // Check and execute automatic zero-data-loss migration if legacy vault.enc exists
+      await VaultMigrationEngine.checkAndMigrate(masterKey);
+
+      // Load all items and categories from SQLCipher
+      const loadedItems = await ItemDao.getAllItems();
+      setItems(loadedItems);
+
+      const loadedCategories = await CategoryDao.getAllCategories();
+      if (loadedCategories.length > 0) {
+        setConfig((prev) => (prev ? { ...prev, customCategories: loadedCategories } : prev));
       }
 
       setStatus('unlocked');
@@ -286,12 +284,19 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       masterKeyRef.current = masterKey;
       saltRef.current = base64ToBytes(activeConfig.salt);
 
-      const encryptedVault = await VaultStorage.loadEncryptedVault();
-      if (encryptedVault) {
-        const decryptedItems = CryptoService.decryptVaultItems(encryptedVault, masterKey);
-        setItems(sanitizeVaultItems(decryptedItems));
-      } else {
-        setItems([]);
+      // Open SQLCipher database
+      await SqlCipherService.openVault(masterKey);
+
+      // Check and migrate legacy vault if needed
+      await VaultMigrationEngine.checkAndMigrate(masterKey);
+
+      // Load all items and categories from SQLCipher
+      const loadedItems = await ItemDao.getAllItems();
+      setItems(loadedItems);
+
+      const loadedCategories = await CategoryDao.getAllCategories();
+      if (loadedCategories.length > 0) {
+        setConfig((prev) => (prev ? { ...prev, customCategories: loadedCategories } : prev));
       }
 
       setStatus('unlocked');
@@ -323,27 +328,33 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       CryptoService.wipeBytes(masterKeyRef.current);
       masterKeyRef.current = null;
     }
+    SqlCipherService.closeVault().catch(() => {});
     setItems([]);
     setStatus('locked');
   };
 
-  const persistVaultItems = async (updatedItems: VaultItem[]): Promise<boolean> => {
-    if (!masterKeyRef.current || !saltRef.current) return false;
+  const triggerBackgroundCloudSync = () => {
+    // WhatsApp-style silent background cloud sync
+    GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
+      ExportImportService.getArmoredVaultBackup()
+    ).catch(() => {});
+  };
+
+  const addItem = async (
+    itemData: Omit<VaultItem, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<boolean> => {
     try {
-      const sanitizedItems = updatedItems.map(sanitizeVaultItem);
-      const encryptedPayload = CryptoService.encryptVaultItems(
-        sanitizedItems,
-        masterKeyRef.current,
-        saltRef.current
-      );
-      await VaultStorage.saveEncryptedVault(encryptedPayload);
-      setItems(sanitizedItems);
+      const newItem: VaultItem = sanitizeVaultItem({
+        ...itemData,
+        id: Math.random().toString(36).substring(2, 15) + Date.now().toString(36),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
 
-      // WhatsApp-style silent background cloud sync if enabled
-      GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
-        ExportImportService.getArmoredVaultBackup()
-      ).catch(() => {});
+      await ItemDao.insertItem(newItem);
+      setItems((prev) => [newItem, ...prev]);
 
+      triggerBackgroundCloudSync();
       return true;
     } catch (e: any) {
       setError(e.message || 'Failed to save item');
@@ -351,35 +362,57 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const addItem = async (
-    itemData: Omit<VaultItem, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<boolean> => {
-    const newItem: VaultItem = {
-      ...itemData,
-      id: Math.random().toString(36).substring(2, 15) + Date.now().toString(36),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const updated = [newItem, ...items];
-    return await persistVaultItems(updated);
-  };
-
   const updateItem = async (item: VaultItem): Promise<boolean> => {
-    const updatedItem = { ...item, updatedAt: new Date().toISOString() };
-    const updated = items.map((i) => (i.id === item.id ? updatedItem : i));
-    return await persistVaultItems(updated);
+    try {
+      const updatedItem: VaultItem = sanitizeVaultItem({
+        ...item,
+        updatedAt: new Date().toISOString(),
+      });
+
+      await ItemDao.updateItem(updatedItem);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? updatedItem : i)));
+
+      triggerBackgroundCloudSync();
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Failed to update item');
+      return false;
+    }
   };
 
   const deleteItem = async (id: string): Promise<boolean> => {
-    const updated = items.filter((i) => i.id !== id);
-    return await persistVaultItems(updated);
+    try {
+      await ItemDao.deleteItem(id);
+      setItems((prev) => prev.filter((i) => i.id !== id));
+
+      triggerBackgroundCloudSync();
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete item');
+      return false;
+    }
   };
 
   const togglePinItem = async (id: string): Promise<boolean> => {
-    const updated = items.map((i) =>
-      i.id === id ? { ...i, isPinned: !i.isPinned, updatedAt: new Date().toISOString() } : i
-    );
-    return await persistVaultItems(updated);
+    try {
+      const isPinned = await ItemDao.togglePin(id);
+      setItems((prev) =>
+        prev
+          .map((i) =>
+            i.id === id ? { ...i, isPinned, updatedAt: new Date().toISOString() } : i
+          )
+          .sort((a, b) => {
+            if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          })
+      );
+
+      triggerBackgroundCloudSync();
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Failed to toggle pin');
+      return false;
+    }
   };
 
   const toggleBiometric = async (enable: boolean): Promise<boolean> => {
@@ -443,7 +476,8 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
 
   const importVaultBackup = async (
     newConfig: VaultConfig,
-    newPayload: EncryptedPayload
+    newPayload?: EncryptedPayload,
+    dbSnapshotBase64?: string
   ): Promise<boolean> => {
     try {
       // 1. Wipe previous in-memory master key and decrypted items
@@ -451,10 +485,10 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         CryptoService.wipeBytes(masterKeyRef.current);
         masterKeyRef.current = null;
       }
+      await SqlCipherService.closeVault();
       setItems([]);
 
       // 2. Clear biometric key from device Keychain/KeyStore
-      // (The imported vault has a new master key that has not yet been authorized on this device)
       await SecureStorageService.clearBiometricKey();
 
       // 3. Mark for biometric setup prompt after next successful master password unlock
@@ -468,7 +502,13 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       };
 
       await VaultStorage.saveVaultConfig(cleanConfig);
-      await VaultStorage.saveEncryptedVault(newPayload);
+
+      // 5. Restore database snapshot (v2) or legacy encrypted vault (v1)
+      if (dbSnapshotBase64) {
+        await VaultStorage.restoreEncryptedDbSnapshot(dbSnapshotBase64);
+      } else if (newPayload) {
+        await VaultStorage.saveEncryptedVault(newPayload);
+      }
 
       setConfig(cleanConfig);
       setBiometricEnabledState(false);
@@ -499,6 +539,9 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+
+      await CategoryDao.insertCategory(newCat);
+
       const existingList = activeConfig.customCategories || [];
       const updatedList = [...existingList, newCat];
 
@@ -514,10 +557,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       await VaultStorage.saveVaultConfig(updatedConfig);
       setConfig(updatedConfig);
 
-      GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
-        ExportImportService.getArmoredVaultBackup()
-      ).catch(() => {});
-
+      triggerBackgroundCloudSync();
       return true;
     } catch (e: any) {
       setError(e.message || 'Failed to add custom category');
@@ -529,6 +569,9 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     try {
       const activeConfig = config || (await VaultStorage.loadVaultConfig());
       if (!activeConfig) return false;
+
+      await CategoryDao.updateCategory(cat);
+
       const existingList = activeConfig.customCategories || [];
       const updatedList = existingList.map((c) =>
         c.id === cat.id ? { ...cat, updatedAt: new Date().toISOString() } : c
@@ -541,10 +584,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       await VaultStorage.saveVaultConfig(updatedConfig);
       setConfig(updatedConfig);
 
-      GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
-        ExportImportService.getArmoredVaultBackup()
-      ).catch(() => {});
-
+      triggerBackgroundCloudSync();
       return true;
     } catch (e: any) {
       setError(e.message || 'Failed to update custom category');
@@ -556,6 +596,9 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     try {
       const activeConfig = config || (await VaultStorage.loadVaultConfig());
       if (!activeConfig) return false;
+
+      await CategoryDao.deleteCategory(id);
+
       const existingList = activeConfig.customCategories || [];
       const updatedList = existingList.filter((c) => c.id !== id);
       const currentPinned = activeConfig.pinnedCategoryIds || ['all', 'login', 'card', 'note'];
@@ -570,18 +613,11 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       await VaultStorage.saveVaultConfig(updatedConfig);
       setConfig(updatedConfig);
 
-      const affectedItems = items.filter((it) => it.category === id);
-      if (affectedItems.length > 0) {
-        const updatedItems = items.map((it) =>
-          it.category === id ? { ...it, category: 'other' as const, updatedAt: new Date().toISOString() } : it
-        );
-        await persistVaultItems(updatedItems);
-      }
+      // Reload items since orphaned items are now 'other'
+      const reloadedItems = await ItemDao.getAllItems();
+      setItems(reloadedItems);
 
-      GoogleDriveBackupService.syncInBackgroundIfEnabled(() =>
-        ExportImportService.getArmoredVaultBackup()
-      ).catch(() => {});
-
+      triggerBackgroundCloudSync();
       return true;
     } catch (e: any) {
       setError(e.message || 'Failed to delete custom category');
