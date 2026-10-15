@@ -89,7 +89,7 @@ export const CreateTypeSheet: React.FC<CreateTypeSheetProps> = ({
 
   const handleManageCategories = () => {
     onClose();
-    router.push('/settings/categories');
+    router.push('/categories');
   };
 
   return (

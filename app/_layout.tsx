@@ -102,19 +102,13 @@ function RootNavigation() {
           }}
         />
         <Stack.Screen
-          name="settings/encrypted-db"
+          name="categories"
           options={{
             headerShown: false,
           }}
         />
         <Stack.Screen
-          name="settings/categories"
-          options={{
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="settings/about"
+          name="about"
           options={{
             headerShown: false,
           }}
