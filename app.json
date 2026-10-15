@@ -24,7 +24,7 @@
         "backgroundColor": "#0F172A"
       },
       "package": "com.btwvault.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {

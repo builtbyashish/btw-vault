@@ -1,0 +1,117 @@
+name: Build Android Release AAB (Play Store)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_version:
+        description: 'Git tag or branch to build (e.g. v1.3.0, main, develop)'
+        required: true
+        default: 'v1.3.0'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-aab:
+    name: Build & Publish Release AAB
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout specified tag or branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_version }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+          cache: 'gradle'
+
+      - name: Install npm dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Ensure Android keystore exists
+        run: |
+          if [ ! -f android/app/debug.keystore ]; then
+            echo "Generating fallback keystore for bundle signing..."
+            keytool -genkey -v \
+              -keystore android/app/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Release,O=btw-vault,C=US"
+          else
+            echo "Keystore exists."
+          fi
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
+      - name: Configure environment (.env)
+        run: |
+          echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '569470226281-04u4ajijsqqbaa90r9heo410mbv9n453.apps.googleusercontent.com' }}" >> .env
+          echo "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '569470226281-04u4ajijsqqbaa90r9heo410mbv9n453.apps.googleusercontent.com' }}" >> .env
+          echo "Configured .env for Play Store release AAB bundle build."
+
+      - name: Build Android Release App Bundle (AAB)
+        run: |
+          cd android
+          ./gradlew bundleRelease --no-daemon
+          cd ..
+
+      - name: Prepare AAB artifact
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          
+          # Find generated AAB bundle
+          AAB_PATH=$(find android/app/build/outputs/bundle/release -name "*.aab" | head -n 1)
+          if [ -z "$AAB_PATH" ]; then
+            echo "Error: No AAB found in android/app/build/outputs/bundle/release!"
+            exit 1
+          fi
+          
+          echo "Found AAB at: $AAB_PATH"
+          mkdir -p bundle-artifacts
+          cp "$AAB_PATH" "bundle-artifacts/btw-vault-v${VERSION}.aab"
+          echo "Copied AAB to bundle-artifacts/btw-vault-v${VERSION}.aab"
+
+      - name: Upload AAB Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: btw-vault-bundle-v${{ env.VERSION }}
+          path: bundle-artifacts/*.aab
+          retention-days: 30
+
+      - name: Attach AAB to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_REF: ${{ inputs.tag_version }}
+        run: |
+          TAG="${INPUT_REF}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            TAG="v${VERSION}"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Uploading .aab bundle to existing release $TAG..."
+            gh release upload "$TAG" bundle-artifacts/*.aab --clobber
+          else
+            echo "Creating release $TAG with AAB bundle..."
+            gh release create "$TAG" bundle-artifacts/*.aab \
+              --title "btw vault ${TAG}" \
+              --notes "Android App Bundle (.aab) for Google Play Console upload."
+          fi
