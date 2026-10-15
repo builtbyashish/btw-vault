@@ -760,7 +760,7 @@ export default function VaultHomeScreen() {
                   style={styles.moreModalManageBtn}
                   onPress={() => {
                     setIsMoreModalVisible(false);
-                    router.push('/settings/categories');
+                    router.push('/categories');
                   }}
                   activeOpacity={0.7}
                   accessibilityRole="button"

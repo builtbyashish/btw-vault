@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { AppHeader } from '../../src/components/AppHeader';
+import { AppHeader } from '../src/components/AppHeader';
 import {
   Plus,
   Trash2,
@@ -40,12 +40,12 @@ import {
   Search,
   Smile,
 } from 'lucide-react-native';
-import { useVault } from '../../src/context/VaultContext';
+import { useVault } from '../src/context/VaultContext';
 import {
   CustomCategoryDefinition,
   FieldSchemaTemplate,
   CustomFieldType,
-} from '../../src/types';
+} from '../src/types';
 import {
   CURATED_CATEGORY_COLORS,
   CURATED_CATEGORY_ICONS,
@@ -59,9 +59,9 @@ import {
   isEmojiIcon,
   cleanEmoji,
   getCategoryIcon,
-} from '../../src/theme/categoryColors';
-import { HapticService } from '../../src/core/haptics';
-import { useKeyboardAwareScroll } from '../../src/core/useKeyboardAwareScroll';
+} from '../src/theme/categoryColors';
+import { HapticService } from '../src/core/haptics';
+import { useKeyboardAwareScroll } from '../src/core/useKeyboardAwareScroll';
 
 const QUICK_PICK_ICONS: { id: string; label: string }[] = [
   { id: 'KeyRound', label: 'Key' },

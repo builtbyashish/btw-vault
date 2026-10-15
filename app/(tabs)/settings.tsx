@@ -521,35 +521,6 @@ export default function SettingsScreen() {
           </View>
           <ChevronRight color="#C7C7CC" size={20} />
         </TouchableOpacity>
-        <View style={styles.rowSeparator} />
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => router.push('/settings/encrypted-db')}
-          activeOpacity={0.5}
-        >
-          <View style={styles.rowContent}>
-            <Text style={styles.rowTitle}>Local Encrypted Database</Text>
-            <Text style={styles.rowSubtitle}>View zero-knowledge ciphertext & storage files</Text>
-          </View>
-          <ChevronRight color="#C7C7CC" size={20} />
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.sectionHeader}>About</Text>
-      <View style={styles.card}>
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => router.push('/settings/about')}
-          activeOpacity={0.5}
-        >
-          <View style={styles.rowContent}>
-            <Text style={styles.rowTitle}>About btw vault</Text>
-            <Text style={styles.rowSubtitle}>
-              Zero-knowledge architecture, features & by Ashish Ranjan
-            </Text>
-          </View>
-          <ChevronRight color="#C7C7CC" size={20} />
-        </TouchableOpacity>
       </View>
 
       <Text style={styles.sectionHeader}>Danger Zone</Text>
@@ -564,10 +535,10 @@ export default function SettingsScreen() {
 
       <TouchableOpacity
         style={styles.footer}
-        onPress={() => router.push('/settings/about')}
+        onPress={() => router.push('/about')}
         activeOpacity={0.7}
       >
-        <Text style={styles.footerText}>btw vault v1.2.0 • Tap for architecture & about</Text>
+        <Text style={styles.footerText}>btw vault v1.3.0 • Tap for architecture & about</Text>
       </TouchableOpacity>
     </ScrollView>
     {AuthModal}

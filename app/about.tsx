@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { AppHeader } from '../../src/components/AppHeader';
+import { AppHeader } from '../src/components/AppHeader';
 import {
   ShieldCheck,
   Lock,
@@ -21,7 +21,6 @@ import {
   CheckCircle2,
   ExternalLink,
   Linkedin,
-  Database,
   EyeOff,
   Cpu,
   Smartphone,
@@ -29,8 +28,8 @@ import {
   Shield,
   ArrowRight,
 } from 'lucide-react-native';
-import { BtwVaultLogo } from '../../src/components/BtwVaultLogo';
-import { HapticService } from '../../src/core/haptics';
+import { BtwVaultLogo } from '../src/components/BtwVaultLogo';
+import { HapticService } from '../src/core/haptics';
 
 export default function AboutScreen() {
   const router = useRouter();
@@ -295,29 +294,12 @@ export default function AboutScreen() {
         </View>
       </View>
 
-      {/* 6. DIAGNOSTIC SHORTCUTS */}
-      <Text style={styles.sectionHeader}>TOOLS & DIAGNOSTICS</Text>
+      {/* 6. VAULT CUSTOMIZATION */}
+      <Text style={styles.sectionHeader}>VAULT CUSTOMIZATION</Text>
       <View style={styles.card}>
         <TouchableOpacity
           style={styles.actionRow}
-          onPress={() => router.push('/settings/encrypted-db')}
-          activeOpacity={0.6}
-        >
-          <View style={[styles.actionIconBox, { backgroundColor: '#3B82F615' }]}>
-            <Database size={17} color="#3B82F6" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.actionTitle}>Inspect Local Encrypted Database</Text>
-            <Text style={styles.actionSubtitle}>View live SQLCipher DB, WAL buffer, and cryptographic metadata</Text>
-          </View>
-          <ChevronRight size={18} color="#C7C7CC" />
-        </TouchableOpacity>
-
-        <View style={styles.itemSeparator} />
-
-        <TouchableOpacity
-          style={styles.actionRow}
-          onPress={() => router.push('/settings/categories')}
+          onPress={() => router.push('/categories')}
           activeOpacity={0.6}
         >
           <View style={[styles.actionIconBox, { backgroundColor: '#8B5CF615' }]}>

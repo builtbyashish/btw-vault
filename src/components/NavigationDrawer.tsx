@@ -17,7 +17,6 @@ import {
   Shield,
   Settings,
   SlidersHorizontal,
-  Database,
   Lock,
   Info,
 } from 'lucide-react-native';
@@ -54,7 +53,6 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     if (!pathname) return 'index';
     if (pathname.includes('about')) return 'about';
     if (pathname.includes('categories')) return 'categories';
-    if (pathname.includes('encrypted-db')) return 'encrypted-db';
     if (pathname.includes('settings')) return 'settings';
     if (pathname.includes('health')) return 'health';
     return 'index';
@@ -151,9 +149,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
       (route === '/(tabs)' && currentRoute === 'index') ||
       (route === '/(tabs)/health' && currentRoute === 'health') ||
       (route === '/(tabs)/settings' && currentRoute === 'settings') ||
-      (route === '/settings/categories' && currentRoute === 'categories') ||
-      (route === '/settings/encrypted-db' && currentRoute === 'encrypted-db') ||
-      (route === '/settings/about' && currentRoute === 'about');
+      (route === '/categories' && currentRoute === 'categories') ||
+      (route === '/about' && currentRoute === 'about');
 
     if (!isAlreadyActive) {
       onNavigate(route);
@@ -317,7 +314,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                 styles.navItem,
                 currentRoute === 'categories' && styles.navItemActive,
               ]}
-              onPress={() => handleNav('/settings/categories')}
+              onPress={() => handleNav('/categories')}
               activeOpacity={0.5}
             >
               <SlidersHorizontal
@@ -352,37 +349,13 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
               )}
             </TouchableOpacity>
 
-            {/* Encrypted Database Inspector */}
-            <TouchableOpacity
-              style={[
-                styles.navItem,
-                currentRoute === 'encrypted-db' && styles.navItemActive,
-              ]}
-              onPress={() => handleNav('/settings/encrypted-db')}
-              activeOpacity={0.5}
-            >
-              <Database
-                color={currentRoute === 'encrypted-db' ? '#007AFF' : '#3C4043'}
-                size={20}
-                style={styles.navIcon}
-              />
-              <Text
-                style={[
-                  styles.navLabel,
-                  currentRoute === 'encrypted-db' && styles.navLabelActive,
-                ]}
-              >
-                Encrypted Database
-              </Text>
-            </TouchableOpacity>
-
             {/* About btw vault */}
             <TouchableOpacity
               style={[
                 styles.navItem,
                 currentRoute === 'about' && styles.navItemActive,
               ]}
-              onPress={() => handleNav('/settings/about')}
+              onPress={() => handleNav('/about')}
               activeOpacity={0.5}
             >
               <Info
