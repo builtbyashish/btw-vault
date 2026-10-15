@@ -96,13 +96,6 @@ jobs:
           cp "$AAB_PATH" "bundle-artifacts/btw-vault-v${VERSION}.aab"
           echo "Copied AAB to bundle-artifacts/btw-vault-v${VERSION}.aab"
 
-      - name: Upload AAB Bundle Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: btw-vault-bundle-v${{ env.VERSION }}
-          path: bundle-artifacts/*.aab
-          retention-days: 30
-
       - name: Attach AAB to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -122,3 +115,15 @@ jobs:
               --title "btw vault ${TAG}" \
               --notes "Android App Bundle (.aab) for Google Play Console upload."
           fi
+
+      - name: Direct Download Summary (No Zip)
+        run: |
+          TAG="${{ inputs.tag_version }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            TAG="v${VERSION}"
+          fi
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/btw-vault-v${VERSION}.aab"
+          echo "## 🚀 Direct AAB Bundle Download (No Zip)" >> $GITHUB_STEP_SUMMARY
+          echo "Direct uncompressed Android App Bundle download for Play Store:" >> $GITHUB_STEP_SUMMARY
+          echo "- **[Download btw-vault-v${VERSION}.aab](${DOWNLOAD_URL})**" >> $GITHUB_STEP_SUMMARY
+          echo "- View on Releases: [${TAG}](https://github.com/${{ github.repository }}/releases/tag/${TAG})" >> $GITHUB_STEP_SUMMARY

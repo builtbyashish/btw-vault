@@ -104,13 +104,6 @@ jobs:
           cp "$APK_PATH" "debug-artifacts/btw-vault-debug-v${VERSION}.apk"
           echo "Copied APK to debug-artifacts/btw-vault-debug-v${VERSION}.apk"
 
-      - name: Upload Debug APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: btw-vault-debug-apk-v${{ env.VERSION }}
-          path: debug-artifacts/*.apk
-          retention-days: 14
-
       - name: Publish or Update Debug Pre-Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,3 +119,11 @@ jobs:
               --title "btw vault v${VERSION} (Debug Build)" \
               --notes "Development Debug APK with native SQLCipher encryption engine. Direct download for Android testing without building locally."
           fi
+
+      - name: Direct Download Summary (No Zip)
+        run: |
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}-debug/btw-vault-debug-v${VERSION}.apk"
+          echo "## 🚀 Direct Debug APK Download (No Zip)" >> $GITHUB_STEP_SUMMARY
+          echo "Direct uncompressed debug APK download:" >> $GITHUB_STEP_SUMMARY
+          echo "- **[Download btw-vault-debug-v${VERSION}.apk](${DOWNLOAD_URL})**" >> $GITHUB_STEP_SUMMARY
+          echo "- View on Releases: [v${VERSION}-debug](https://github.com/${{ github.repository }}/releases/tag/v${VERSION}-debug)" >> $GITHUB_STEP_SUMMARY
