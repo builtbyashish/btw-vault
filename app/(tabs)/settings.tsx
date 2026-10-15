@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
@@ -523,6 +524,41 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      <Text style={styles.sectionHeader}>Privacy & Legal</Text>
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={async () => {
+            await HapticService.selection();
+            Linking.openURL('https://builtbyashish.com/btw-vault/privacy');
+          }}
+          activeOpacity={0.5}
+        >
+          <View style={styles.rowContent}>
+            <Text style={styles.rowTitle}>Privacy Policy</Text>
+            <Text style={styles.rowSubtitle}>Zero-tracking & offline-first privacy guarantees</Text>
+          </View>
+          <ChevronRight color="#C7C7CC" size={20} />
+        </TouchableOpacity>
+
+        <View style={styles.rowSeparator} />
+
+        <TouchableOpacity
+          style={styles.row}
+          onPress={async () => {
+            await HapticService.selection();
+            Linking.openURL('https://builtbyashish.com/btw-vault/data-safety');
+          }}
+          activeOpacity={0.5}
+        >
+          <View style={styles.rowContent}>
+            <Text style={styles.rowTitle}>Data Safety & Security</Text>
+            <Text style={styles.rowSubtitle}>Client-side AES-256 encryption & Drive backup policy</Text>
+          </View>
+          <ChevronRight color="#C7C7CC" size={20} />
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.sectionHeader}>Danger Zone</Text>
       <View style={styles.card}>
         <TouchableOpacity style={styles.row} onPress={handleWipeVault} activeOpacity={0.5}>
@@ -538,7 +574,7 @@ export default function SettingsScreen() {
         onPress={() => router.push('/about')}
         activeOpacity={0.7}
       >
-        <Text style={styles.footerText}>btw vault v1.3.1 • Tap for architecture & about</Text>
+        <Text style={styles.footerText}>btw vault v1.3.2 • Tap for architecture & about</Text>
       </TouchableOpacity>
     </ScrollView>
     {AuthModal}

@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Shield,
   ArrowRight,
+  Globe,
 } from 'lucide-react-native';
 import { BtwVaultLogo } from '../src/components/BtwVaultLogo';
 import { HapticService } from '../src/core/haptics';
@@ -34,9 +35,8 @@ import { HapticService } from '../src/core/haptics';
 export default function AboutScreen() {
   const router = useRouter();
 
-  const handleOpenLinkedIn = async () => {
-    HapticService.selection();
-    const url = 'https://www.linkedin.com/in/offical-ashish/';
+  const handleOpenUrl = async (url: string) => {
+    await HapticService.selection();
     try {
       const supported = await Linking.canOpenURL(url);
       if (supported) {
@@ -45,6 +45,10 @@ export default function AboutScreen() {
     } catch {
       // Fallback
     }
+  };
+
+  const handleOpenLinkedIn = async () => {
+    await handleOpenUrl('https://www.linkedin.com/in/offical-ashish/');
   };
 
   return (
@@ -66,7 +70,7 @@ export default function AboutScreen() {
         </Text>
         <View style={styles.versionBadge}>
           <ShieldCheck color="#10B981" size={13} style={{ marginRight: 5 }} />
-          <Text style={styles.versionBadgeText}>v1.3.1 • Offline-First • SQLCipher AES-256</Text>
+          <Text style={styles.versionBadgeText}>v1.3.2 • Offline-First • SQLCipher AES-256</Text>
         </View>
       </View>
 
@@ -313,7 +317,60 @@ export default function AboutScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 7. CREATOR & DEVELOPER (MOVED TO BOTTOM) */}
+      {/* 7. LEGAL & PRIVACY */}
+      <Text style={styles.sectionHeader}>LEGAL & PRIVACY</Text>
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={() => handleOpenUrl('https://builtbyashish.com/btw-vault/privacy')}
+          activeOpacity={0.6}
+        >
+          <View style={[styles.actionIconBox, { backgroundColor: '#10B98115' }]}>
+            <ShieldCheck size={17} color="#10B981" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.actionTitle}>Privacy Policy</Text>
+            <Text style={styles.actionSubtitle}>Zero telemetry, zero tracking, 100% offline-first</Text>
+          </View>
+          <ExternalLink size={16} color="#C7C7CC" />
+        </TouchableOpacity>
+
+        <View style={styles.itemSeparator} />
+
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={() => handleOpenUrl('https://builtbyashish.com/btw-vault/data-safety')}
+          activeOpacity={0.6}
+        >
+          <View style={[styles.actionIconBox, { backgroundColor: '#3B82F615' }]}>
+            <Lock size={17} color="#3B82F6" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.actionTitle}>Data Safety & Security</Text>
+            <Text style={styles.actionSubtitle}>Client-side AES-256 encryption & Drive backup policy</Text>
+          </View>
+          <ExternalLink size={16} color="#C7C7CC" />
+        </TouchableOpacity>
+
+        <View style={styles.itemSeparator} />
+
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={() => handleOpenUrl('https://builtbyashish.com/btw-vault/app-access')}
+          activeOpacity={0.6}
+        >
+          <View style={[styles.actionIconBox, { backgroundColor: '#F59E0B15' }]}>
+            <Globe size={17} color="#F59E0B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.actionTitle}>App Access & Verification</Text>
+            <Text style={styles.actionSubtitle}>Review instructions & zero-knowledge guarantees</Text>
+          </View>
+          <ExternalLink size={16} color="#C7C7CC" />
+        </TouchableOpacity>
+      </View>
+
+      {/* 8. CREATOR & DEVELOPER (MOVED TO BOTTOM) */}
       <Text style={styles.sectionHeader}>CREATOR & DEVELOPER</Text>
       <View style={styles.card}>
         <View style={styles.creatorHeader}>
@@ -347,6 +404,23 @@ export default function AboutScreen() {
             <Text style={styles.linkedInSub}>linkedin.com/in/offical-ashish</Text>
           </View>
           <ExternalLink size={16} color="#0A66C2" style={styles.linkedInExternalIcon} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.linkedInButton, { marginTop: 10, borderColor: '#E2E8F0' }]}
+          onPress={() => handleOpenUrl('https://builtbyashish.com/btw-vault/')}
+          activeOpacity={0.8}
+          accessibilityRole="link"
+          accessibilityLabel="Visit btw-vault official website"
+        >
+          <View style={[styles.linkedInIconWrap, { backgroundColor: '#0F172A' }]}>
+            <Globe size={18} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.linkedInTitle}>Official Website</Text>
+            <Text style={styles.linkedInSub}>builtbyashish.com/btw-vault</Text>
+          </View>
+          <ExternalLink size={16} color="#64748B" style={styles.linkedInExternalIcon} />
         </TouchableOpacity>
       </View>
 
