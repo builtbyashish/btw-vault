@@ -7,6 +7,7 @@ import { AppFileSystem } from '../src/core/storage/fileSystemAdapter';
 import { ItemDao } from '../src/core/storage/itemDao';
 import { CryptoService } from '../src/core/crypto/cryptoService';
 import { MockSqlDatabase } from './mockSqlDatabase';
+import './mockFileSystem';
 import { VaultItem } from '../src/types';
 
 describe('VaultMigrationEngine Zero-Data-Loss Migration Tests', () => {

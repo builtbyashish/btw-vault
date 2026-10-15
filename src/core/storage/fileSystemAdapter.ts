@@ -1,4 +1,6 @@
-// Safely load Expo FileSystem on native, or fall back to Node.js fs in testing / Node runtime
+// Pure React Native / Expo FileSystem Adapter
+// Native Expo modules are used on device. Tests inject a FileSystemDriver.
+
 let expoLegacyFs: any = null;
 let expoPaths: any = null;
 
@@ -8,7 +10,7 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   expoPaths = require('expo-file-system').Paths;
 } catch {
-  // Native Expo modules not available (Node / test runner)
+  // Native Expo modules not available in non-native test environments
   expoLegacyFs = null;
   expoPaths = null;
 }
@@ -18,62 +20,62 @@ export const EncodingType = {
   Base64: 'base64' as const,
 };
 
+export interface FileSystemDriver {
+  getPaths(): { document: { uri: string }; cache: { uri: string } };
+  getInfoAsync(uri: string): Promise<{ exists: boolean; size?: number; isDirectory?: boolean }>;
+  deleteAsync(uri: string): Promise<void>;
+  writeAsStringAsync(
+    uri: string,
+    content: string,
+    options?: { encoding?: 'utf8' | 'base64' }
+  ): Promise<void>;
+  readAsStringAsync(
+    uri: string,
+    options?: { encoding?: 'utf8' | 'base64' }
+  ): Promise<string>;
+  moveAsync(options: { from: string; to: string }): Promise<void>;
+}
+
+let customDriver: FileSystemDriver | null = null;
+
 export class AppFileSystem {
-  private static getNodeFs() {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('node:fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('node:path');
-    return { fs, path };
+  /**
+   * Injects a custom driver (used for unit / integration tests in Node)
+   */
+  static setDriver(driver: FileSystemDriver | null): void {
+    customDriver = driver;
   }
 
   static getPaths(): { document: { uri: string }; cache: { uri: string } } {
+    if (customDriver) {
+      return customDriver.getPaths();
+    }
     if (expoPaths) {
       return expoPaths;
     }
-    // Node.js fallback
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const os = require('node:os');
-    const { path, fs } = this.getNodeFs();
-    const docDir = path.join(os.tmpdir(), 'btwvault_doc');
-    const cacheDir = path.join(os.tmpdir(), 'btwvault_cache');
-
-    if (!fs.existsSync(docDir)) fs.mkdirSync(docDir, { recursive: true });
-    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-
-    return {
-      document: { uri: `file://${docDir}` },
-      cache: { uri: `file://${cacheDir}` },
-    };
+    throw new Error('AppFileSystem: Native expo-file-system Paths is unavailable.');
   }
 
   static async getInfoAsync(
     uri: string
   ): Promise<{ exists: boolean; size?: number; isDirectory?: boolean }> {
+    if (customDriver) {
+      return await customDriver.getInfoAsync(uri);
+    }
     if (expoLegacyFs) {
       return await expoLegacyFs.getInfoAsync(uri);
     }
-    const { fs } = this.getNodeFs();
-    const filePath = uri.replace(/^file:\/\//, '');
-    try {
-      const stats = fs.statSync(filePath);
-      return { exists: true, size: stats.size, isDirectory: stats.isDirectory() };
-    } catch {
-      return { exists: false, isDirectory: false };
-    }
+    throw new Error('AppFileSystem: Native expo-file-system legacy is unavailable.');
   }
 
   static async deleteAsync(uri: string): Promise<void> {
+    if (customDriver) {
+      return await customDriver.deleteAsync(uri);
+    }
     if (expoLegacyFs) {
       return await expoLegacyFs.deleteAsync(uri);
     }
-    const { fs } = this.getNodeFs();
-    const filePath = uri.replace(/^file:\/\//, '');
-    try {
-      fs.unlinkSync(filePath);
-    } catch {
-      // Ignore
-    }
+    throw new Error('AppFileSystem: Native expo-file-system legacy is unavailable.');
   }
 
   static async writeAsStringAsync(
@@ -81,39 +83,35 @@ export class AppFileSystem {
     content: string,
     options?: { encoding?: 'utf8' | 'base64' }
   ): Promise<void> {
+    if (customDriver) {
+      return await customDriver.writeAsStringAsync(uri, content, options);
+    }
     if (expoLegacyFs) {
       return await expoLegacyFs.writeAsStringAsync(uri, content, options);
     }
-    const { fs, path } = this.getNodeFs();
-    const filePath = uri.replace(/^file:\/\//, '');
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const encoding = options?.encoding === 'base64' ? 'base64' : 'utf8';
-    fs.writeFileSync(filePath, content, { encoding });
+    throw new Error('AppFileSystem: Native expo-file-system legacy is unavailable.');
   }
 
   static async readAsStringAsync(
     uri: string,
     options?: { encoding?: 'utf8' | 'base64' }
   ): Promise<string> {
+    if (customDriver) {
+      return await customDriver.readAsStringAsync(uri, options);
+    }
     if (expoLegacyFs) {
       return await expoLegacyFs.readAsStringAsync(uri, options);
     }
-    const { fs } = this.getNodeFs();
-    const filePath = uri.replace(/^file:\/\//, '');
-    const encoding = options?.encoding === 'base64' ? 'base64' : 'utf8';
-    return fs.readFileSync(filePath, { encoding });
+    throw new Error('AppFileSystem: Native expo-file-system legacy is unavailable.');
   }
 
   static async moveAsync(options: { from: string; to: string }): Promise<void> {
+    if (customDriver) {
+      return await customDriver.moveAsync(options);
+    }
     if (expoLegacyFs) {
       return await expoLegacyFs.moveAsync(options);
     }
-    const { fs } = this.getNodeFs();
-    const fromPath = options.from.replace(/^file:\/\//, '');
-    const toPath = options.to.replace(/^file:\/\//, '');
-    fs.renameSync(fromPath, toPath);
+    throw new Error('AppFileSystem: Native expo-file-system legacy is unavailable.');
   }
 }

@@ -40,14 +40,10 @@ export function getRandomBytes(length: number): Uint8Array {
     globalThis.crypto.getRandomValues(bytes);
     return bytes;
   }
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('expo-crypto').getRandomBytes(length);
-  } catch {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const nodeCrypto = require('node:crypto');
-    return new Uint8Array(nodeCrypto.randomBytes(length));
-  }
+  // Fallback for React Native environments where globalThis.crypto is not polyfilled
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const expoCrypto = require('expo-crypto');
+  return expoCrypto.getRandomBytes(length);
 }
 
 export class CryptoService {

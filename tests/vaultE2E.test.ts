@@ -6,6 +6,7 @@ import { CategoryDao } from '../src/core/storage/categoryDao';
 import { CryptoService } from '../src/core/crypto/cryptoService';
 import { ExportImportService } from '../src/core/migration/exportImportService';
 import { MockSqlDatabase } from './mockSqlDatabase';
+import './mockFileSystem';
 import { VaultItem, VaultConfig, CustomCategoryDefinition } from '../src/types';
 
 describe('Vault Full Lifecycle E2E Test Suite', () => {
