@@ -5,6 +5,16 @@ on:
     branches:
       - develop
   workflow_dispatch:
+    inputs:
+      architecture:
+        description: 'Target architecture (arm64-v8a for physical phones, all for emulators)'
+        required: true
+        default: 'arm64-v8a'
+        type: choice
+        options:
+          - arm64-v8a
+          - arm64-v8a,armeabi-v7a
+          - armeabi-v7a,arm64-v8a,x86,x86_64
 
 permissions:
   contents: write
@@ -15,6 +25,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -64,8 +81,10 @@ jobs:
 
       - name: Build Android Debug APK
         run: |
+          ARCH="${{ inputs.architecture || 'arm64-v8a' }}"
+          echo "Building debug APK for architecture: $ARCH"
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug -PreactNativeArchitectures="$ARCH" --no-daemon
           cd ..
 
       - name: Prepare Debug APK artifact
