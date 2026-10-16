@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   moreModalScrollContent: {
-    paddingBottom: 6,
+    paddingBottom: 16,
   },
   moreModalGrid: {
     flexDirection: 'row',
@@ -976,15 +976,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   moreModalSquareCard: {
-    aspectRatio: 1,
-    minHeight: 82,
+    minHeight: 88,
     backgroundColor: '#F8F9FA',
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     position: 'relative',
   },
   moreModalSquareCardSelected: {
@@ -1015,19 +1015,20 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   moreModalCardIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   moreModalCardTitle: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '600',
     color: '#1C1C1E',
     textAlign: 'center',
     letterSpacing: -0.2,
+    paddingHorizontal: 2,
   },
   moreModalCardTitleSelected: {
     fontWeight: '700',
@@ -1037,7 +1038,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     color: '#8E8E93',
-    marginTop: 2,
+    marginTop: 1,
   },
   moreModalCardCountSelected: {
     color: '#3A3A3C',
