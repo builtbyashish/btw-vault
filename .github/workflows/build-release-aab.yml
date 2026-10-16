@@ -42,7 +42,11 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: 17
-          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Install npm dependencies
         run: npm ci --legacy-peer-deps
@@ -91,6 +95,7 @@ jobs:
 
       - name: Build Android Release App Bundle (AAB)
         env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4608m -XX:MaxMetaspaceSize=1024m -Dorg.gradle.parallel=true"
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
           USE_CCACHE: '1'
