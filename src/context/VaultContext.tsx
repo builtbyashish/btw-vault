@@ -522,10 +522,46 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const customCategories = useMemo(() => config?.customCategories || [], [config]);
-  const pinnedCategoryIds = useMemo(
-    () => config?.pinnedCategoryIds || ['all', 'login', 'card', 'note'],
-    [config]
-  );
+
+  const pinnedCategoryIds = useMemo(() => {
+    const raw = config?.pinnedCategoryIds || ['all', 'login', 'card', 'note'];
+    const validCustomIds = new Set(customCategories.map((c) => c.id));
+    const validBuiltins = new Set(['all', 'login', 'card', 'note']);
+
+    // Filter out orphaned / stale IDs that no longer exist
+    const cleaned = raw.filter((id) => validBuiltins.has(id) || validCustomIds.has(id));
+
+    // If slots are available (< 5) and custom categories exist that are not pinned, auto-pin them
+    if (cleaned.length < 5 && customCategories.length > 0) {
+      for (const cat of customCategories) {
+        if (cleaned.length >= 5) break;
+        if (!cleaned.includes(cat.id)) {
+          cleaned.push(cat.id);
+        }
+      }
+    }
+
+    return cleaned;
+  }, [config?.pinnedCategoryIds, customCategories]);
+
+  // Synchronize and persist sanitized pinned category IDs if orphaned IDs were cleaned up
+  useEffect(() => {
+    if (!config) return;
+    const currentPinned = config.pinnedCategoryIds || ['all', 'login', 'card', 'note'];
+    const isDifferent =
+      currentPinned.length !== pinnedCategoryIds.length ||
+      currentPinned.some((id, idx) => id !== pinnedCategoryIds[idx]);
+
+    if (isDifferent) {
+      const updatedConfig: VaultConfig = {
+        ...config,
+        pinnedCategoryIds,
+        updatedAt: new Date().toISOString(),
+      };
+      VaultStorage.saveVaultConfig(updatedConfig).catch(() => {});
+      setConfig(updatedConfig);
+    }
+  }, [config, pinnedCategoryIds]);
 
   const addCustomCategory = async (
     catData: Omit<CustomCategoryDefinition, 'id' | 'createdAt' | 'updatedAt'>

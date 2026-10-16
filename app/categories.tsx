@@ -441,13 +441,27 @@ export default function CustomCategoriesScreen() {
             contentContainerStyle={styles.actionPreviewStrip}
           >
             {pinnedCategoryIds.map((id) => {
+              if (id === 'all') {
+                return (
+                  <View key={id} style={[styles.actionPill, { borderColor: '#8E8E93' }]}>
+                    <Text style={styles.actionPillText} numberOfLines={1}>
+                      All
+                    </Text>
+                  </View>
+                );
+              }
               const isBuiltin = id === 'login' || id === 'card' || id === 'note';
+              const customMatch = customCategories.find((c) => c.id === id);
+              if (!isBuiltin && !customMatch) {
+                return null;
+              }
+
               const name = isBuiltin
                 ? CATEGORY_THEMES[id]?.name || id
-                : customCategories.find((c) => c.id === id)?.name || id;
+                : customMatch?.name || 'Custom';
               const color = isBuiltin
                 ? CATEGORY_THEMES[id]?.color || '#007AFF'
-                : customCategories.find((c) => c.id === id)?.color || '#007AFF';
+                : customMatch?.color || '#007AFF';
 
               return (
                 <View key={id} style={[styles.actionPill, { borderColor: color }]}>
