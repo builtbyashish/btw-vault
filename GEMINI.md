@@ -20,3 +20,12 @@ Before executing any `git push` command (to `develop`, `main`, or any release br
    Run `npm test` and `npx tsc --noEmit` to confirm 0 errors before pushing.
 5. **Push**:
    Only after the version is bumped and committed, push to origin.
+
+## Google Play Console Upload Guidance
+
+### 1. Warning: "There is no deobfuscation file..."
+
+👉 Action: Ignore it.
+
+• This is just asking for a ProGuard/R8 mapping.txt file (used for readable crash stack traces).
+• It is 100% optional and won't stop your app from working or being published.
