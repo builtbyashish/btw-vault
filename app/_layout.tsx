@@ -4,7 +4,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
-import { usePreventScreenCapture } from 'expo-screen-capture';
+import { ScreenCaptureService } from '../src/core/security/screenCaptureService';
 import { Lock } from 'lucide-react-native';
 import { VaultProvider, useVault } from '../src/context/VaultContext';
 import { CreateTypeSheet } from '../src/components/CreateTypeSheet';
@@ -138,7 +138,9 @@ function RootNavigation() {
 }
 
 export default function RootLayout() {
-  usePreventScreenCapture();
+  useEffect(() => {
+    ScreenCaptureService.syncOnStartup();
+  }, []);
 
   const [fontsLoaded] = useFonts({
     Outfit: require('../assets/fonts/Outfit.ttf'),
