@@ -104,7 +104,10 @@ jobs:
           USE_CCACHE: '1'
           CCACHE_COMPRESS: 'true'
         run: |
-          ARCH="${{ inputs.architecture || 'arm64-v8a' }}"
+          ARCH="${{ inputs.architecture }}"
+          if [ -z "$ARCH" ]; then
+            ARCH="arm64-v8a"
+          fi
           echo "Building debug APK for architecture: $ARCH"
           cd android
           ./gradlew assembleDebug -PreactNativeArchitectures="$ARCH" --no-daemon
