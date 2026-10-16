@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Lock,
   ShieldCheck,
+  ShieldAlert,
   Cloud,
   UploadCloud,
   RefreshCw,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react-native';
 import { useVault } from '../../src/context/VaultContext';
 import { BiometricService } from '../../src/core/security/biometricService';
+import { ScreenCaptureService } from '../../src/core/security/screenCaptureService';
 import { ExportImportService } from '../../src/core/migration/exportImportService';
 import {
   GoogleDriveBackupService,
@@ -48,6 +50,7 @@ export default function SettingsScreen() {
   const router = useRouter();
 
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [allowScreenshots, setAllowScreenshots] = useState(false);
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<CloudBackupStatus>({
     isConfigured: false,
@@ -65,11 +68,13 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     checkBiometrics();
+    checkScreenshots();
     loadCloudStatus();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
+      checkScreenshots();
       loadCloudStatus();
     }, [])
   );
@@ -193,6 +198,49 @@ export default function SettingsScreen() {
   const checkBiometrics = async () => {
     const available = await BiometricService.isBiometricAvailable();
     setBiometricAvailable(available);
+  };
+
+  const checkScreenshots = async () => {
+    try {
+      const allowed = await ScreenCaptureService.isScreenshotsAllowed();
+      setAllowScreenshots(allowed);
+    } catch {}
+  };
+
+  const handleToggleScreenshots = async (newValue: boolean) => {
+    if (newValue) {
+      // Step 1: Sensitive authentication check
+      const authenticated = await requireAuth('Authenticate to allow screenshots & recording');
+      if (!authenticated) {
+        return;
+      }
+
+      // Step 2: High-severity warning confirmation dialog
+      Alert.alert(
+        '⚠️ Allow Screenshots & Recording?',
+        'Enabling screenshots allows other apps, background screen recorders, and task-switcher snapshots on your device to capture passwords, payment cards, and private notes.\n\nOnly enable this if you understand the security risks.',
+        [
+          {
+            text: 'Keep Blocked',
+            style: 'cancel',
+            onPress: () => HapticService.selection(),
+          },
+          {
+            text: 'Enable Anyway',
+            style: 'destructive',
+            onPress: async () => {
+              await ScreenCaptureService.setScreenshotsAllowed(true);
+              setAllowScreenshots(true);
+              await HapticService.warning();
+            },
+          },
+        ]
+      );
+    } else {
+      await ScreenCaptureService.setScreenshotsAllowed(false);
+      setAllowScreenshots(false);
+      await HapticService.success();
+    }
   };
 
   const handleToggleBiometric = async (value: boolean) => {
@@ -349,15 +397,39 @@ export default function SettingsScreen() {
         <View style={styles.row}>
           <View style={styles.rowContent}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.rowTitle}>Anti-Capture Protection</Text>
-              <View style={styles.activeBadge}>
-                <Text style={styles.activeBadgeText}>ACTIVE</Text>
-              </View>
+              <Text style={styles.rowTitle}>Allow Screenshots</Text>
+              {!allowScreenshots ? (
+                <View style={styles.activeBadge}>
+                  <Text style={styles.activeBadgeText}>PROTECTED</Text>
+                </View>
+              ) : (
+                <View style={[styles.activeBadge, styles.warningBadge]}>
+                  <Text style={[styles.activeBadgeText, styles.warningBadgeText]}>UNPROTECTED</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.rowSubtitle}>Blocks screenshots & screen recording across vault</Text>
+            <Text style={styles.rowSubtitle}>
+              {!allowScreenshots
+                ? 'Screenshots & screen recordings are blocked across the vault'
+                : 'Permitted · Sensitive credentials may be visible to screen recorders'}
+            </Text>
           </View>
-          <ShieldCheck color="#10B981" size={20} />
+          <Switch
+            value={allowScreenshots}
+            onValueChange={handleToggleScreenshots}
+            trackColor={{ false: '#E5E5EA', true: '#EF4444' }}
+            thumbColor={Platform.OS === 'android' ? (allowScreenshots ? '#DC2626' : '#FFFFFF') : undefined}
+          />
         </View>
+
+        {allowScreenshots && (
+          <View style={styles.screenshotWarningBox}>
+            <ShieldAlert color="#DC2626" size={18} style={{ marginRight: 8, marginTop: 1 }} />
+            <Text style={styles.screenshotWarningText}>
+              Security Warning: Vault passwords, payment cards, and private notes can now be captured by screenshots, screen recording, and system task previews.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.rowSeparator} />
 
@@ -574,7 +646,7 @@ export default function SettingsScreen() {
         onPress={() => router.push('/about')}
         activeOpacity={0.7}
       >
-        <Text style={styles.footerText}>btw vault v1.3.8 • Tap for architecture & about</Text>
+        <Text style={styles.footerText}>btw vault v1.3.9 • Tap for architecture & about</Text>
       </TouchableOpacity>
     </ScrollView>
     {AuthModal}
@@ -718,6 +790,30 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  warningBadge: {
+    backgroundColor: '#FEE2E2',
+  },
+  warningBadgeText: {
+    color: '#B91C1C',
+  },
+  screenshotWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 12,
+  },
+  screenshotWarningText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#991B1B',
+    lineHeight: 18,
+    fontWeight: '500',
   },
   waHeroContainer: {
     padding: 16,

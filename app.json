@@ -2,7 +2,7 @@
   "expo": {
     "name": "btw vault",
     "slug": "btw-vault",
-    "version": "1.3.8",
+    "version": "1.3.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": [
@@ -27,7 +27,7 @@
         "backgroundColor": "#0F172A"
       },
       "package": "com.btwvault.app",
-      "versionCode": 15,
+      "versionCode": 16,
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
