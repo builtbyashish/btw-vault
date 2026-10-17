@@ -79,6 +79,15 @@ export class SqlCipherService {
   }
 
   /**
+   * Returns the directory path where vault.db is stored on the filesystem.
+   * Strips any leading file:// scheme so it's a valid raw filesystem directory.
+   */
+  static getDbDirectory(): string {
+    const docUri = AppFileSystem.getPaths().document.uri;
+    return docUri.replace(/^file:\/\//, '').replace(/\/$/, '');
+  }
+
+  /**
    * Open and decrypt the SQLCipher database using the Argon2id-derived master key
    */
   static async openVault(masterKey: Uint8Array): Promise<ISqlDatabase> {
@@ -94,10 +103,39 @@ export class SqlCipherService {
     }
 
     const encryptionKey = masterKeyToHexKey(masterKey);
+    const dbDir = this.getDbDirectory();
+    const targetDbUri = this.getDbFilePath();
+
+    // Check if target database already exists in dbDir
+    let targetExists = false;
+    try {
+      const info = await AppFileSystem.getInfoAsync(targetDbUri);
+      targetExists = info.exists;
+    } catch {
+      targetExists = false;
+    }
+
+    // If target database does not exist in dbDir, check if a legacy database exists in op-sqlite's default location
+    if (!targetExists) {
+      try {
+        const legacyDb = opSqlite.open({
+          name: VAULT_DB_NAME,
+          encryptionKey,
+          failOnCreate: true,
+        });
+        // If legacy database opened successfully, checkpoint and vacuum it into the target location
+        await legacyDb.execute('PRAGMA wal_checkpoint(PASSIVE);');
+        await legacyDb.execute(`VACUUM INTO '${dbDir}/${VAULT_DB_NAME}';`);
+        await legacyDb.close();
+      } catch {
+        // No legacy database existed or could not be opened
+      }
+    }
 
     try {
       const db = opSqlite.open({
         name: VAULT_DB_NAME,
+        location: dbDir,
         encryptionKey,
       });
 
@@ -322,21 +360,14 @@ export class SqlCipherService {
   }
 
   /**
-   * Gets absolute path to the main database file
+   * Gets absolute URI to the main database file for AppFileSystem operations.
    */
   static getDbFilePath(): string {
-    if (this.activeDb) {
-      try {
-        return this.activeDb.getDbPath();
-      } catch {
-        // Fallback
-      }
-    }
     return `${AppFileSystem.getPaths().document.uri}/${VAULT_DB_NAME}`;
   }
 
   /**
-   * Deletes all local SQLCipher files (vault.db, vault.db-wal, vault.db-shm)
+   * Deletes all local SQLCipher files (vault.db, vault.db-wal, vault.db-shm) and legacy databases
    */
   static async wipeVaultDatabase(): Promise<void> {
     await this.closeVault();
@@ -353,6 +384,20 @@ export class SqlCipherService {
         if (info.exists) {
           await AppFileSystem.deleteAsync(p);
         }
+      } catch {
+        // Ignore
+      }
+    }
+
+    // Also remove legacy database in op-sqlite's default location if present
+    const opSqlite = getOpSqlite();
+    if (opSqlite) {
+      try {
+        const legacyDb = opSqlite.open({
+          name: VAULT_DB_NAME,
+          failOnCreate: true,
+        });
+        legacyDb.delete();
       } catch {
         // Ignore
       }
