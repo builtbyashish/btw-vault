@@ -243,8 +243,11 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       setItems(loadedItems);
 
       const loadedCategories = await CategoryDao.getAllCategories();
+      const configCategories = activeConfig.customCategories || [];
       if (loadedCategories.length > 0) {
         setConfig((prev) => (prev ? { ...prev, customCategories: loadedCategories } : prev));
+      } else if (configCategories.length > 0) {
+        await CategoryDao.insertCategoriesBatch(configCategories);
       }
 
       setStatus('unlocked');
@@ -295,8 +298,11 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       setItems(loadedItems);
 
       const loadedCategories = await CategoryDao.getAllCategories();
+      const configCategories = activeConfig.customCategories || [];
       if (loadedCategories.length > 0) {
         setConfig((prev) => (prev ? { ...prev, customCategories: loadedCategories } : prev));
+      } else if (configCategories.length > 0) {
+        await CategoryDao.insertCategoriesBatch(configCategories);
       }
 
       setStatus('unlocked');
