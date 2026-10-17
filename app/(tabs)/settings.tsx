@@ -646,7 +646,7 @@ export default function SettingsScreen() {
         onPress={() => router.push('/about')}
         activeOpacity={0.7}
       >
-        <Text style={styles.footerText}>btw vault v1.3.12 • Tap for architecture & about</Text>
+        <Text style={styles.footerText}>btw vault v1.3.13 • Tap for architecture & about</Text>
       </TouchableOpacity>
     </ScrollView>
     {AuthModal}
