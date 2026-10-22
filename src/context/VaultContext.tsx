@@ -534,20 +534,10 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     const validCustomIds = new Set(customCategories.map((c) => c.id));
     const validBuiltins = new Set(['all', 'login', 'card', 'note']);
 
-    // Filter out orphaned / stale IDs that no longer exist
-    const cleaned = raw.filter((id) => validBuiltins.has(id) || validCustomIds.has(id));
+    // Filter out orphaned / stale IDs that no longer exist and deduplicate
+    const cleaned = Array.from(new Set(raw.filter((id) => validBuiltins.has(id) || validCustomIds.has(id))));
 
-    // If slots are available (< 5) and custom categories exist that are not pinned, auto-pin them
-    if (cleaned.length < 5 && customCategories.length > 0) {
-      for (const cat of customCategories) {
-        if (cleaned.length >= 5) break;
-        if (!cleaned.includes(cat.id)) {
-          cleaned.push(cat.id);
-        }
-      }
-    }
-
-    return cleaned;
+    return cleaned.length > 0 ? cleaned : ['all', 'login', 'card', 'note'];
   }, [config?.pinnedCategoryIds, customCategories]);
 
   // Synchronize and persist sanitized pinned category IDs if orphaned IDs were cleaned up
@@ -678,6 +668,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       };
       await VaultStorage.saveVaultConfig(updatedConfig);
       setConfig(updatedConfig);
+      triggerBackgroundCloudSync();
       return true;
     } catch (e: any) {
       setError(e.message || 'Failed to update pinned categories');
