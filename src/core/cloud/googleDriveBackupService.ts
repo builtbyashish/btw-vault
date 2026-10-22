@@ -523,7 +523,13 @@ export class GoogleDriveBackupService {
     });
 
     if (!res.ok) {
-      throw new Error(`Failed to check Drive backup: ${res.status}`);
+      if (res.status === 403) {
+        throw new Error(
+          'Google Drive access denied (403). For test accounts, please ensure your email is added to "Test users" in Google Cloud Console.'
+        );
+      }
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Failed to check Drive backup: ${res.status} ${errText}`);
     }
 
     const data = await res.json();
@@ -628,6 +634,11 @@ export class GoogleDriveBackupService {
     );
 
     if (!res.ok) {
+      if (res.status === 403) {
+        throw new Error(
+          'Google Drive access denied (403). For test accounts, please ensure your email is added to "Test users" in Google Cloud Console.'
+        );
+      }
       throw new Error(`Failed to download backup file: ${res.status}`);
     }
 
