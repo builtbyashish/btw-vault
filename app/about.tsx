@@ -89,7 +89,7 @@ export default function AboutScreen() {
         </Text>
         <View style={styles.versionBadge}>
           <ShieldCheck color="#10B981" size={13} style={{ marginRight: 5 }} />
-          <Text style={styles.versionBadgeText}>v1.3.14 • Offline-First • SQLCipher AES-256</Text>
+          <Text style={styles.versionBadgeText}>v1.3.15 • Offline-First • SQLCipher AES-256</Text>
         </View>
       </View>
 
