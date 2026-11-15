@@ -28,6 +28,7 @@ import {
   Shield,
   ArrowRight,
   Globe,
+  Star,
 } from 'lucide-react-native';
 import { BtwVaultLogo } from '../src/components/BtwVaultLogo';
 import { HapticService } from '../src/core/haptics';
@@ -44,6 +45,24 @@ export default function AboutScreen() {
       }
     } catch {
       // Fallback
+    }
+  };
+
+  const handleOpenPlayStore = async () => {
+    await HapticService.selection();
+    const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.btwvault.app&pcampaignid=web_share';
+    const marketUrl = 'market://details?id=com.btwvault.app';
+    try {
+      if (Platform.OS === 'android') {
+        const canOpenMarket = await Linking.canOpenURL(marketUrl);
+        if (canOpenMarket) {
+          await Linking.openURL(marketUrl);
+          return;
+        }
+      }
+      await Linking.openURL(playStoreUrl);
+    } catch {
+      await Linking.openURL(playStoreUrl);
     }
   };
 
@@ -421,6 +440,23 @@ export default function AboutScreen() {
             <Text style={styles.linkedInSub}>builtbyashish.com/btw-vault</Text>
           </View>
           <ExternalLink size={16} color="#64748B" style={styles.linkedInExternalIcon} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.linkedInButton, { marginTop: 10, borderColor: '#BAE6FD', backgroundColor: '#F0F9FF' }]}
+          onPress={handleOpenPlayStore}
+          activeOpacity={0.8}
+          accessibilityRole="link"
+          accessibilityLabel="Rate and review btw vault on Google Play Store"
+        >
+          <View style={[styles.linkedInIconWrap, { backgroundColor: '#0284C7' }]}>
+            <Star size={18} color="#FFFFFF" fill="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.linkedInTitle, { color: '#0369A1' }]}>Google Play Store</Text>
+            <Text style={styles.linkedInSub}>Rate & review btw vault on Google Play</Text>
+          </View>
+          <ExternalLink size={16} color="#0284C7" style={styles.linkedInExternalIcon} />
         </TouchableOpacity>
       </View>
 

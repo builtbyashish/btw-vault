@@ -629,6 +629,36 @@ export default function SettingsScreen() {
           </View>
           <ChevronRight color="#C7C7CC" size={20} />
         </TouchableOpacity>
+
+        <View style={styles.rowSeparator} />
+
+        <TouchableOpacity
+          style={styles.row}
+          onPress={async () => {
+            await HapticService.selection();
+            const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.btwvault.app&pcampaignid=web_share';
+            const marketUrl = 'market://details?id=com.btwvault.app';
+            try {
+              if (Platform.OS === 'android') {
+                const canOpenMarket = await Linking.canOpenURL(marketUrl);
+                if (canOpenMarket) {
+                  await Linking.openURL(marketUrl);
+                  return;
+                }
+              }
+              await Linking.openURL(playStoreUrl);
+            } catch {
+              await Linking.openURL(playStoreUrl);
+            }
+          }}
+          activeOpacity={0.5}
+        >
+          <View style={styles.rowContent}>
+            <Text style={styles.rowTitle}>Rate on Google Play</Text>
+            <Text style={styles.rowSubtitle}>Support development with a review on the Play Store</Text>
+          </View>
+          <ChevronRight color="#C7C7CC" size={20} />
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.sectionHeader}>Danger Zone</Text>

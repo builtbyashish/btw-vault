@@ -2,11 +2,19 @@
 
 [![CI & Unit Tests](https://github.com/builtbyashish/btw-vault/actions/workflows/test.yml/badge.svg)](https://github.com/builtbyashish/btw-vault/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Google Play](https://img.shields.io/badge/Google_Play-Get_it_on_Google_Play-4285F4?logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=com.btwvault.app&pcampaignid=web_share)
 [![Platform: Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/builtbyashish/btw-vault/releases)
 [![Security: Zero--Knowledge](https://img.shields.io/badge/Security-Zero--Knowledge-10B981.svg)](#security-architecture)
 
 > **Zero-Knowledge, Offline-First Personal Cryptographic Vault.**  
 > Store your logins, payment cards, private notes, and custom categories securely on your device with military-grade encryption. No tracking, no ads, no telemetry, no mandatory cloud accounts.
+
+---
+
+## 📥 Download
+
+- **Google Play Store**: [Get it on Google Play](https://play.google.com/store/apps/details?id=com.btwvault.app&pcampaignid=web_share)
+- **Direct APK / AAB**: [Latest GitHub Releases](https://github.com/builtbyashish/btw-vault/releases/latest)
 
 ---
 
