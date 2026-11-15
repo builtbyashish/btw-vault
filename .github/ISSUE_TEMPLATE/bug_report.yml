@@ -1,0 +1,59 @@
+name: 🐛 Bug Report
+description: Create a report to help us improve btw vault
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please ensure this is not a security vulnerability. If it is a security issue, refer to [SECURITY.md](https://github.com/builtbyashish/btw-vault/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: App Version
+      description: What version of btw vault are you running? (e.g. v1.3.14)
+      placeholder: "v1.3.14"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System / Android Version
+      options:
+        - Android 14+
+        - Android 13
+        - Android 12
+        - Android 11 or older
+        - Emulator
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this behavior?
+      placeholder: |
+        1. Open Vault
+        2. Go to '...'
+        3. Tap on '...'
+        4. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear description of what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Screenshots
+      description: Attach relevant stack traces or non-sensitive screenshots.
