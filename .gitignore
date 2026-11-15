@@ -31,7 +31,6 @@ android/.idea/
 *.key
 *.keystore
 !android/app/debug.keystore
-!android/app/release.keystore
 *.jks
 *.p8
 *.p12
